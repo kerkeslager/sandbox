@@ -1,0 +1,5 @@
+a.out.c
+__pycache__
+.env
+*.pyc
+*.swp
