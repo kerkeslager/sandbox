@@ -16,10 +16,80 @@ class IsIntegerTests(unittest.TestCase):
         for o in [object(), '', 0.1, [], (), {}, set()]:
             self.assertFalse(stutter.is_integer(o))
 
+class UndelimitStringTests(unittest.TestCase):
+    def test_returns_empty_strings(self):
+        expected = ''
+        actual = stutter.undelimit_string('""')
+        
+        self.assertEqual(expected, actual)
+
+    def test_returns_strings_without_escapes(self):
+        expected = 'Hello, world'
+        actual = stutter.undelimit_string('"Hello, world"')
+        
+        self.assertEqual(expected, actual)
+
+    def test_returns_strings_with_newlines(self):
+        expected = 'Hello, world\nGoodbye, cruel world'
+        actual = stutter.undelimit_string('"Hello, world\\nGoodbye, cruel world"')
+        
+        self.assertEqual(expected, actual)
+
+    def test_returns_strings_with_escaped_delimiters(self):
+        expected = '"Hello, world"'
+        actual = stutter.undelimit_string('"\\"Hello, world\\""')
+        
+        self.assertEqual(expected, actual)
+
+    def test_returns_strings_with_escaped_escape_characters(self):
+        expected = '\\no'
+        actual = stutter.undelimit_string('"\\\\no"')
+        
+        self.assertEqual(expected, actual)
+
+class IndentTests(unittest.TestCase):
+    def test_indents_single_line(self):
+        expected = '    Hello, world'
+        actual = stutter.indent('Hello, world')
+        self.assertEqual(expected, actual)
+
+    def test_indents_multiple_lines(self):
+        expected = '    Hello, world\n    Goodbye, cruel world'
+        actual = stutter.indent('Hello, world\nGoodbye, cruel world')
+        self.assertEqual(expected, actual)
+
+    def test_leaves_empty_lines_empty(self):
+        expected = '    Hello, world\n\n    Goodbye, cruel world'
+        actual = stutter.indent('Hello, world\n \nGoodbye, cruel world')
+        self.assertEqual(expected, actual)
+
+    def test_indents_already_indented_lines(self):
+        expected = '        Hello, world\n\n        Goodbye, cruel world'
+        actual = stutter.indent('    Hello, world\n\n    Goodbye, cruel world')
+        self.assertEqual(expected, actual)
+
 class ParseAllTests(unittest.TestCase):
     def test_parses_integers(self):
         expected = [0]
         actual = stutter.parse_all('0')
+
+        self.assertEqual(expected, actual)
+
+    def test_parses_identifiers(self):
+        expected = [stutter.Symbol('print')]
+        actual = stutter.parse_all('print')
+
+        self.assertEqual(expected, actual)
+
+    def test_parses_strings(self):
+        expected = ['Hello, world']
+        actual = stutter.parse_all('"Hello, world"')
+
+        self.assertEqual(expected, actual)
+
+    def test_parses_strings_with_escaped_delimiters(self):
+        expected = ['"Hello, world"']
+        actual = stutter.parse_all('"\\"Hello, world\\""')
 
         self.assertEqual(expected, actual)
 
@@ -53,6 +123,103 @@ class ParseAllTests(unittest.TestCase):
     def test_raises_exception_for_unopened_parenthese(self):
         self.assertRaises(Exception, stutter.parse_all, ')')
 
+class QuoteToCTests(unittest.TestCase):
+    def test_quotes_integer_literals(self):
+        for i in range(5):
+            expected = stutter.CFunctionCallExpression(
+                'makeObjectPointerFromInteger',
+                [stutter.CIntegerLiteralExpression(i)],
+            )
+            
+            actual = stutter.quote_to_c(i)
+            
+            self.assertEqual(expected, actual)
+
+    def test_quotes_string_literals(self):
+        s = 'Hello, world'
+        expected = stutter.CFunctionCallExpression(
+            'makeObjectPointerFromString',
+            [stutter.CStringLiteralExpression(s)],
+        )
+
+        actual = stutter.quote_to_c(s)
+
+        self.assertEqual(expected, actual)
+
+class EvaluateApplicationArgumentsToCTests(unittest.TestCase):
+    def test_evaluates_empty_to_null(self):
+        expected = stutter.CVariableExpression('NULL')
+        actual = stutter.evaluate_application_arguments_to_c(())
+
+        self.assertEqual(expected, actual)
+
+    def test_evaluates_one_argument_to_cons(self):
+        argument = 42
+
+        sentinel = stutter.CStringLiteralExpression('1bd9707e76f8f807f3bad3e39049fea4a36d8ef2f8e2ed471ec755f7adb291d5')
+
+        def mock(argument_to_quote):
+            if argument_to_quote == argument:
+                return sentinel
+
+        expected = stutter.CFunctionCallExpression(
+            'c_cons',
+            (sentinel, stutter.CVariableExpression('NULL')),
+        )
+
+        actual = stutter.evaluate_application_arguments_to_c(
+            (argument,),
+            quote_to_c = mock,
+        )
+
+        self.assertEqual(expected, actual)
+
+class EvaluateApplicationToCTests(unittest.TestCase):
+    def test_evaluates_function_calls_with_no_arguments(self):
+        name = 'name'
+
+        sentinel = stutter.CVariableExpression('NULL')
+
+        def mock(arguments):
+            assert arguments == ()
+            return sentinel
+
+        result = stutter.evaluate_application_to_c(
+            (stutter.Symbol(name),),
+            evaluate_application_arguments_to_c = mock,
+        )
+
+        self.assertEqual(result.name, name)
+        self.assertEqual(len(result.arguments), 1)
+        self.assertIs(result.arguments[0], sentinel)
+
+    def test_evaluates_function_calls_with_arguments(self):
+        name = 'print'
+        argument = 42 
+
+        sentinel = stutter.CFunctionCallExpression(
+            'cons',
+            [
+                stutter.CFunctionCallExpression(
+                    'makeObjectPointerFromInteger',
+                    [stutter.CIntegerLiteralExpression(argument)],
+                ),
+            ],
+        )
+
+        def mock(arguments):
+            assert arguments == (argument,)
+            return sentinel
+
+        result = stutter.evaluate_application_to_c(
+            (stutter.Symbol(name), argument),
+            evaluate_application_arguments_to_c = mock,
+        )
+
+        self.assertEqual(result.name, name)
+        self.assertEqual(len(result.arguments), 1)
+        self.assertIs(result.arguments[0], sentinel)
+
 class EvaluateToCTests(unittest.TestCase):
     def test_evaluates_integers(self):
         for i in range(5):
@@ -60,40 +227,40 @@ class EvaluateToCTests(unittest.TestCase):
             self.assertIsInstance(result, stutter.CIntegerLiteralExpression)
             self.assertEqual(result.integer, i)
 
+    def test_evaluates_string_literals(self):
+        s = 'Hello, world'
+        result = stutter.evaluate_to_c(s)
+
+        self.assertIsInstance(result, stutter.CStringLiteralExpression)
+        self.assertEqual(result.string, s)
+
+    def test_calls_evaluate_application_when_given_an_application(self):
+        sentinel = object()
+        application = (stutter.Symbol('print'), 'Hello, world')
+
+        def mock(argument):
+            if argument == application:
+                return sentinel
+
+        result = stutter.evaluate_to_c(
+            application,
+            evaluate_application_to_c = mock,
+        )
+
+        self.assertIs(result, sentinel)
+
 class EvaluateAllToCTests(unittest.TestCase):
-    def test_returns_main(self):
+    def test_returns_function_body(self):
         result = stutter.evaluate_all_to_c([0])
 
-        self.assertIsInstance(result, stutter.CFunctionDeclaration)
-        self.assertEqual(result.name, 'main')
+        self.assertIsInstance(result, stutter.CFunctionBody)
 
     def test_main_contains_expression_statements_followed_by_return_statement(self):
         result = stutter.evaluate_all_to_c([0,0,0])
 
-        self.assertIsInstance(result.body[0],stutter.CExpressionStatement)
-        self.assertIsInstance(result.body[1],stutter.CExpressionStatement)
-        self.assertIsInstance(result.body[2],stutter.CReturnStatement)
-
-class IndentTests(unittest.TestCase):
-    def test_indents_single_line(self):
-        expected = '  Hello, world'
-        actual = stutter.indent('Hello, world')
-        self.assertEqual(expected, actual)
-
-    def test_indents_multiple_lines(self):
-        expected = '  Hello, world\n  Goodbye, cruel world'
-        actual = stutter.indent('Hello, world\nGoodbye, cruel world')
-        self.assertEqual(expected, actual)
-
-    def test_leaves_empty_lines_empty(self):
-        expected = '  Hello, world\n\n  Goodbye, cruel world'
-        actual = stutter.indent('Hello, world\n \nGoodbye, cruel world')
-        self.assertEqual(expected, actual)
-
-    def test_indents_already_indented_lines(self):
-        expected = '    Hello, world\n\n    Goodbye, cruel world'
-        actual = stutter.indent('  Hello, world\n \n  Goodbye, cruel world')
-        self.assertEqual(expected, actual)
+        self.assertIsInstance(result.statements[0],stutter.CExpressionStatement)
+        self.assertIsInstance(result.statements[1],stutter.CExpressionStatement)
+        self.assertIsInstance(result.statements[2],stutter.CReturnStatement)
 
 class GeneratePointerTypeTests(unittest.TestCase):
     def test_basic(self):
@@ -140,6 +307,30 @@ class GenerateIntegerLiteralExpressionTests(unittest.TestCase):
         )
         self.assertEqual(expected, actual)
 
+class GenerateStringLiteralExpressionTests(unittest.TestCase):
+    def test_basic(self):
+        expected = '"Hello, world"'
+        actual = stutter.generate_string_literal_expression(
+            stutter.CStringLiteralExpression('Hello, world'),
+        )
+        self.assertEqual(expected, actual)
+
+    def test_escapes(self):
+        expected = r'"\\\n\"\t"'
+        actual = stutter.generate_string_literal_expression(
+            stutter.CStringLiteralExpression('\\\n"\t'),
+        )
+        self.assertEqual(expected, actual)
+
+class GenerateVariableExpressionTests(unittest.TestCase):
+    def test_generates(self):
+        expected = 'name'
+        actual = stutter.generate_variable_expression(
+            stutter.CVariableExpression(expected),
+        )
+
+        self.assertEqual(expected, actual)
+
 class GenerateFunctionCallExpressionTests(unittest.TestCase):
     def test_no_arguments(self):
         expected = 'name()'
@@ -179,6 +370,22 @@ class GenerateExpressionTests(unittest.TestCase):
         actual = stutter.generate_expression(
                 stutter.CIntegerLiteralExpression(0),
                 generate_integer_literal_expression = lambda x : expected)
+
+        self.assertIs(expected, actual)
+
+    def test_generates_string_literal_expressions(self):
+        expected = object()
+        actual = stutter.generate_expression(
+                stutter.CStringLiteralExpression('Hello, world'),
+                generate_string_literal_expression = lambda x : expected)
+
+        self.assertIs(expected, actual)
+
+    def test_generates_variable_expression(self):
+        expected = object()
+        actual = stutter.generate_expression(
+                stutter.CVariableExpression('name'),
+                generate_variable_expression = lambda x : expected)
 
         self.assertIs(expected, actual)
 
@@ -238,12 +445,15 @@ class GenerateFunctionDeclarationTests(unittest.TestCase):
             ]
 
         function_declaration = stutter.CFunctionDeclaration(
-                return_type,
-                'main',
-                argument_declarations,
-                [stutter.CReturnStatement(stutter.CIntegerLiteralExpression(0))])
+            return_type,
+            'main',
+            argument_declarations,
+            stutter.CFunctionBody(
+                [stutter.CReturnStatement(stutter.CIntegerLiteralExpression(0))],
+            ),
+        )
 
-        expected = 'int main(int argc, char** argv)\n{\n  return 0;\n}'
+        expected = 'int main(int argc, char** argv)\n{\n    return 0;\n}'
         actual = stutter.generate_function_declaration(function_declaration)
         self.assertEqual(expected, actual)
 

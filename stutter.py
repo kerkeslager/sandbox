@@ -6,6 +6,7 @@ To run this file:
     python stutter.py stutter_code.stt > c_code.c
 '''
 
+import itertools
 import re
 import string
 
@@ -16,12 +17,70 @@ def is_integer(s_expression):
         and not s_expression is True \
         and not s_expression is False
 
+ESCAPE_CHARACTERS = {
+    '\\'    : '\\',
+    'n'     : '\n',
+}
+
+def undelimit_string(s):
+    assert len(s) >= 2
+
+    delimiter = s[0]
+    assert delimiter == '"' # This is temporary, " is currently the only delimiter
+    assert s[-1] == delimiter
+
+    escape_characters = dict(ESCAPE_CHARACTERS)
+    escape_characters[delimiter] = delimiter
+
+    s = s[1:-1]
+
+    index = 0
+    result = ''
+
+    while index < len(s):
+        ch = s[index]
+
+        if ch == '\\':
+            index += 1
+
+            # TODO Handle when it's not a valid escape character
+            ch = escape_characters[s[index]]
+            
+        index += 1
+        result += ch
+
+    return result
+
+TAB_WIDTH = 4
+
+def indent(string):
+    assert isinstance(string, str)
+
+    def indent_line(line):
+        line = line.rstrip()
+
+        if line == '':
+            return line
+
+        return ' ' * TAB_WIDTH + line
+
+    return '\n'.join(indent_line(line) for line in string.splitlines())
+
 # String to s-expressions
+
+class Symbol(object):
+    def __init__(self, string):
+        self.string = string
+
+    def __eq__(self, other):
+        return self.string == other.string
 
 TOKEN = re.compile(r'\s*({})'.format('|'.join('(?P<{}>{})'.format(*token) for token in [
     ('open_parenthese',         r'\('),
     ('close_parenthese',        r'\)'),
+    ('identifier',              r'[a-z]+'), # We can expand this as needed
     ('integer_literal',         r'\d+'),
+    ('string_literal',          r'"(\\"|[^"])*"'),
     ('unexpected_character',    r'.'),
 ])))
 
@@ -41,8 +100,14 @@ def parse_all(source):
             stack[-1].append(tuple(items))
             items = stack.pop()
 
+        elif token.group('identifier'):
+            items.append(Symbol(token.group('identifier')))
+
         elif token.group('integer_literal'):
             items.append(int(token.group('integer_literal')))
+
+        elif token.group('string_literal'):
+            items.append(undelimit_string(token.group('string_literal')))
 
         elif token.group('unexpected_character'):
             raise Exception('Unexpected character {}'.format(
@@ -51,7 +116,6 @@ def parse_all(source):
 
         else:
             raise Exception()
-
 
     if len(stack) > 0:
         raise Exception('Parenthese opened but not closed')
@@ -79,19 +143,40 @@ class CExpression(object):
 
 class CIntegerLiteralExpression(CExpression):
     def __init__(self, integer):
-        assert isinstance(integer, int)
-
-        # Booleans in Python are integers but we don't want them
-        assert not integer is True
-        assert not integer is False
-
+        assert is_integer(integer)
         self.integer = integer
+
+    def __eq__(self, other):
+        assert isinstance(other, CIntegerLiteralExpression)
+        return self.integer == other.integer
+
+class CStringLiteralExpression(CExpression):
+    def __init__(self, string):
+        assert isinstance(string, str)
+        self.string = string
+
+    def __eq__(self, other):
+        assert isinstance(other, CStringLiteralExpression)
+        return self.string == other.string
+
+class CVariableExpression(CExpression):
+    def __init__(self, name):
+        assert isinstance(name, str)
+        self.name = name
+
+    def __eq__(self, other):
+        assert isinstance(other, CVariableExpression)
+        return self.name == other.name
 
 class CFunctionCallExpression(CExpression):
     def __init__(self, name, arguments):
         assert all(isinstance(argument, CExpression) for argument in arguments)
         self.name = name
         self.arguments = arguments
+
+    def __eq__(self, other):
+        assert isinstance(other, CFunctionCallExpression)
+        return self.name == other.name and self.arguments == other.arguments
 
 class CStatement(object):
     pass
@@ -104,13 +189,18 @@ class CReturnStatement(CStatement):
     def __init__(self, expression):
         self.expression = expression
 
+class CFunctionBody(object):
+    def __init__(self, statements):
+        statements = list(statements)
+        assert all(isinstance(s, CStatement) for s in statements)
+        self.statements = statements
+
 class CFunctionDeclaration(object):
     def __init__(self, return_type, name, argument_declaration_list, body):
         assert isinstance(return_type, CType)
         assert isinstance(argument_declaration_list, list)
         assert all(isinstance(ad, CArgumentDeclaration) for ad in argument_declaration_list)
-        assert isinstance(body, list)
-        assert all(isinstance(s, CStatement) for s in body)
+        assert isinstance(body, CFunctionBody)
 
         self.return_type = return_type
         self.name = name
@@ -119,42 +209,76 @@ class CFunctionDeclaration(object):
 
 # BEGIN S-expression to C AST layer
 
-def evaluate_to_c(s_expression):
+def quote_to_c(s_expression):
+    if is_integer(s_expression):
+        return CFunctionCallExpression(
+            'makeObjectPointerFromInteger',
+            [CIntegerLiteralExpression(s_expression)],
+        )
+
+    if isinstance(s_expression, str):
+        return CFunctionCallExpression(
+            'makeObjectPointerFromString',
+            [CStringLiteralExpression(s_expression)],
+        )
+
+    raise Exception('Not implemented')
+
+def evaluate_application_arguments_to_c(
+        arguments,
+        quote_to_c = quote_to_c,
+    ):
+    
+    if len(arguments) == 0:
+        return CVariableExpression('NULL')
+
+    return CFunctionCallExpression(
+        'c_cons',
+        (
+            quote_to_c(arguments[0]),
+            evaluate_application_arguments_to_c(arguments[1:]),
+        ),
+    )
+
+def evaluate_application_to_c(
+        s_expression,
+        evaluate_application_arguments_to_c = evaluate_application_arguments_to_c,
+    ):
+
+    assert isinstance(s_expression, tuple)
+    if isinstance(s_expression[0], Symbol):
+        return CFunctionCallExpression(
+            s_expression[0].string,
+            (evaluate_application_arguments_to_c(s_expression[1:]),),
+        )
+
+    raise Exception('Not implemented')
+
+def evaluate_to_c(
+        s_expression,
+        evaluate_application_to_c = evaluate_application_to_c,
+    ):
+
+    if isinstance(s_expression, tuple):
+        return evaluate_application_to_c(s_expression)
+
     if is_integer(s_expression):
         return CIntegerLiteralExpression(s_expression)
+
+    if isinstance(s_expression, str):
+        return CStringLiteralExpression(s_expression)
 
     raise Exception('Unable to evaluate expression {} to C'.format(s_expression))
 
 def evaluate_all_to_c(s_expressions):
     c_expressions = list(map(evaluate_to_c, s_expressions))
-    body = list(map(CExpressionStatement, c_expressions[:-1])) + [CReturnStatement(c_expressions[-1])]
+
+    return CFunctionBody(itertools.chain(
+        map(CExpressionStatement, c_expressions[:-1]),
+        [CReturnStatement(c_expressions[-1])],
+    ))
     
-    return CFunctionDeclaration(
-            CType('int'),
-            'main',
-            [
-                CArgumentDeclaration(CType('int'), 'argc'),
-                CArgumentDeclaration(CPointerType(CPointerType(CType('char'))), 'argv'),
-            ],
-            body,
-        )
-
 # BEGIN C AST to C source layer
-
-TAB_WIDTH = 2
-
-def indent(string):
-    assert isinstance(string, str)
-
-    def indent_line(line):
-        line = line.rstrip()
-
-        if line == '':
-            return line
-
-        return ' ' * TAB_WIDTH + line
-
-    return '\n'.join(indent_line(line) for line in string.splitlines())
 
 def generate_pointer_type(pointer_type):
     assert isinstance(pointer_type, CPointerType)
@@ -181,6 +305,37 @@ def generate_integer_literal_expression(expression):
     assert isinstance(expression, CIntegerLiteralExpression)
     return str(expression.integer)
 
+C_ESCAPE_SEQUENCES = {
+    # Taken from https://en.wikipedia.org/wiki/Escape_sequences_in_C
+    '\x07'  : r'\a',
+    '\x08'  : r'\b',
+    '\x0c'  : r'\f',
+    '\x0a'  : r'\n',
+    '\x0d'  : r'\r',
+    '\x09'  : r'\t',
+    '\x0b'  : r'\v',
+    '\x5c'  : r'\\',
+    '\x27'  : r"\'",
+    '\x22'  : r'\"',
+    '\x3f'  : r'\?',
+}
+
+def generate_string_literal_expression(expression):
+    assert isinstance(expression, CStringLiteralExpression)
+
+    result = '"'
+
+    for ch in expression.string:
+        result += C_ESCAPE_SEQUENCES.get(ch, ch)
+
+    result += '"'
+
+    return result
+
+def generate_variable_expression(expression):
+    assert isinstance(expression, CVariableExpression)
+    return expression.name
+
 def generate_function_call_expression(expression):
     assert isinstance(expression, CFunctionCallExpression)
     return '{}({})'.format(
@@ -191,11 +346,19 @@ def generate_function_call_expression(expression):
 def generate_expression(
         expression,
         generate_integer_literal_expression = generate_integer_literal_expression,
+        generate_string_literal_expression = generate_string_literal_expression,
+        generate_variable_expression = generate_variable_expression,
         generate_function_call_expression = generate_function_call_expression,
         ):
 
     if isinstance(expression, CIntegerLiteralExpression):
         return generate_integer_literal_expression(expression)
+
+    if isinstance(expression, CStringLiteralExpression):
+        return generate_string_literal_expression(expression)
+
+    if isinstance(expression, CVariableExpression):
+        return generate_variable_expression(expression)
 
     if isinstance(expression, CFunctionCallExpression):
         return generate_function_call_expression(expression)
@@ -221,9 +384,9 @@ def generate_statement(
 
     raise Exception('Handling for statements of type {} not implemented'.format(type(statement.type)))
 
-def generate_statement_list(statements):
-    assert all(isinstance(s, CStatement) for s in statements)
-    return '\n'.join(generate_statement(s) for s in statements)
+def generate_function_body(function_body):
+    assert isinstance(function_body, CFunctionBody)
+    return '\n'.join(generate_statement(s) for s in function_body.statements)
 
 FUNCTION_DEFINITION_TEMPLATE = string.Template(
 '''
@@ -239,7 +402,147 @@ def generate_function_declaration(function_declaration):
         return_type = generate_type(function_declaration.return_type),
         name = function_declaration.name,
         argument_declaration_list = generate_argument_declaration_list(function_declaration.argument_declaration_list),
-        body = indent(generate_statement_list(function_declaration.body)),
+        body = indent(generate_function_body(function_declaration.body)),
+    )
+
+PROGRAM_TEMPLATE = string.Template(
+'''
+#include <assert.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+struct Object;
+typedef struct Object Object;
+
+enum Type
+{
+    CELL,
+    STRING
+};
+typedef enum Type Type;
+
+struct Cell;
+typedef struct Cell Cell;
+struct Cell
+{
+    Object* left;
+    Object* right;
+};
+
+union Instance
+{
+    Cell cell;
+    char* string;
+};
+typedef union Instance Instance;
+
+Instance makeInstanceFromCell(Cell cell)
+{
+    Instance result;
+    result.cell = cell;
+    return result;
+}
+
+Instance makeInstanceFromString(char* string)
+{
+    Instance result;
+    result.string = string;
+    return result;
+}
+
+struct Object
+{
+    Type type;
+    Instance instance;
+};
+
+Object makeObject(Type t, Instance i)
+{
+    Object result;
+    result.type = t;
+    result.instance = i;
+    return result;
+}
+
+Object makeObjectFromCell(Cell cell)
+{
+    return makeObject(CELL, makeInstanceFromCell(cell));
+}
+
+Object makeObjectFromString(char* string)
+{
+    return makeObject(STRING, makeInstanceFromString(string));
+}
+
+Object* makeObjectPointerFromObject(Object o)
+{
+    Object* result = malloc(sizeof(Object));
+    *result = o;
+    return result;
+}
+
+Object* makeObjectPointerFromCell(Cell cell)
+{
+    return makeObjectPointerFromObject(makeObjectFromCell(cell));
+}
+
+Object* makeObjectPointerFromString(char* string)
+{
+    return makeObjectPointerFromObject(makeObjectFromString(string));
+}
+
+Cell makeCell(Object* left, Object* right)
+{
+    Cell result;
+    result.left = left;
+    result.right = right;
+    return result;
+}
+
+Object* c_cons(Object* left, Object* right)
+{
+    Cell cell = makeCell(left, right);
+    return makeObjectPointerFromCell(cell);
+}
+
+void c_print(Object* stutter_string)
+{
+    assert(stutter_string->type == STRING);
+    char* c_string = stutter_string->instance.string;
+    printf("%s", c_string);
+}
+
+int countArgs(Object* args)
+{
+    if(args == NULL) return 0;
+
+    assert(args->type == CELL);
+    return 1 + countArgs(args->instance.cell.right);
+}
+
+Object* getArg(int index, Object* args)
+{
+    if(index == 0) return args->instance.cell.left;
+
+    return getArg(index - 1, args->instance.cell.right);
+}
+
+void print(Object* args)
+{
+    assert(countArgs(args) == 1);
+    Object* stutter_string = getArg(0, args);
+    c_print(stutter_string);
+}
+
+int main(int argc, char** argv)
+{
+$body
+}
+'''.strip())
+
+def generate_program(body):
+    return PROGRAM_TEMPLATE.substitute(
+        body = body,
     )
 
 if __name__ == '__main__':
@@ -249,5 +552,8 @@ if __name__ == '__main__':
     with open(source_file_name, 'r') as source_file:
         source = source_file.read()
 
-    result = generate_function_declaration(evaluate_all_to_c(parse_all(source)))
+    result = generate_program(
+        indent(generate_function_body(evaluate_all_to_c(parse_all(source)))),
+    )
+
     print(result)
