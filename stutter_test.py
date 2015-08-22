@@ -81,6 +81,12 @@ class ParseAllTests(unittest.TestCase):
 
         self.assertEqual(expected, actual)
 
+    def test_parses_identifiers_with_dashes(self):
+        expected = [stutter.Symbol('hello-world')]
+        actual = stutter.parse_all('hello-world')
+
+        self.assertEqual(expected, actual)
+
     def test_parses_strings(self):
         expected = ['Hello, world']
         actual = stutter.parse_all('"Hello, world"')
@@ -146,6 +152,17 @@ class QuoteToCTests(unittest.TestCase):
 
         self.assertEqual(expected, actual)
 
+    def test_quotes_symbols(self):
+        s = 'symbol'
+        expected = stutter.CFunctionCallExpression(
+            'getSymbol',
+            [stutter.CStringLiteralExpression(s)],
+        )
+
+        actual = stutter.quote_to_c(stutter.Symbol(s))
+
+        self.assertEqual(expected, actual)
+
 class EvaluateApplicationArgumentsToCTests(unittest.TestCase):
     def test_evaluates_empty_to_null(self):
         expected = stutter.CVariableExpression('NULL')
@@ -190,8 +207,12 @@ class EvaluateApplicationToCTests(unittest.TestCase):
         )
 
         self.assertEqual(result.name, name)
-        self.assertEqual(len(result.arguments), 1)
-        self.assertIs(result.arguments[0], sentinel)
+        self.assertEqual(len(result.arguments), 2)
+        self.assertTrue(isinstance(
+            result.arguments[0],
+            stutter.CReferenceExpression,
+        ))
+        self.assertIs(result.arguments[1], sentinel)
 
     def test_evaluates_function_calls_with_arguments(self):
         name = 'print'
@@ -217,8 +238,12 @@ class EvaluateApplicationToCTests(unittest.TestCase):
         )
 
         self.assertEqual(result.name, name)
-        self.assertEqual(len(result.arguments), 1)
-        self.assertIs(result.arguments[0], sentinel)
+        self.assertEqual(len(result.arguments), 2)
+        self.assertTrue(isinstance(
+            result.arguments[0],
+            stutter.CReferenceExpression,
+        ))
+        self.assertIs(result.arguments[1], sentinel)
 
 class EvaluateToCTests(unittest.TestCase):
     def test_evaluates_integers(self):
@@ -258,9 +283,10 @@ class EvaluateAllToCTests(unittest.TestCase):
     def test_main_contains_expression_statements_followed_by_return_statement(self):
         result = stutter.evaluate_all_to_c([0,0,0])
 
-        self.assertIsInstance(result.statements[0],stutter.CExpressionStatement)
+        self.assertIsInstance(result.statements[0],stutter.CDefinitionStatement)
         self.assertIsInstance(result.statements[1],stutter.CExpressionStatement)
-        self.assertIsInstance(result.statements[2],stutter.CReturnStatement)
+        self.assertIsInstance(result.statements[2],stutter.CExpressionStatement)
+        self.assertIsInstance(result.statements[3],stutter.CReturnStatement)
 
 class GeneratePointerTypeTests(unittest.TestCase):
     def test_basic(self):
@@ -331,6 +357,15 @@ class GenerateVariableExpressionTests(unittest.TestCase):
 
         self.assertEqual(expected, actual)
 
+class GenerateReferenceExpressionTests(unittest.TestCase):
+    def test_generates(self):
+        expected = '&name';
+        actual = stutter.generate_reference_expression(
+            stutter.CReferenceExpression(stutter.CVariableExpression('name')),
+        )
+
+        self.assertEqual(expected, actual)
+
 class GenerateFunctionCallExpressionTests(unittest.TestCase):
     def test_no_arguments(self):
         expected = 'name()'
@@ -389,6 +424,14 @@ class GenerateExpressionTests(unittest.TestCase):
 
         self.assertIs(expected, actual)
 
+    def test_generates_variable_expression(self):
+        expected = object()
+        actual = stutter.generate_expression(
+                stutter.CReferenceExpression(stutter.CVariableExpression('name')),
+                generate_reference_expression = lambda x : expected)
+
+        self.assertIs(expected, actual)
+
     def test_generates_function_call_expression(self):
         expected = object()
         actual = stutter.generate_expression(
@@ -418,6 +461,20 @@ class GenerateStatement(unittest.TestCase):
 
         self.assertIs(expected, actual)
 
+    def test_generates_definition_statement(self):
+        definition_statement = stutter.CDefinitionStatement(
+            stutter.CType('int'),
+            'number',
+            stutter.CIntegerLiteralExpression(0),
+        )
+
+        expected = object()
+        actual = stutter.generate_statement(
+            definition_statement,
+            generate_definition_statement = lambda _ : expected)
+
+        self.assertIs(expected, actual)
+
 class GenerateExpressionStatementTests(unittest.TestCase):
     def test_generates_return_statement(self):
         expression_statement = stutter.CExpressionStatement(stutter.CIntegerLiteralExpression(0))
@@ -433,6 +490,19 @@ class GenerateReturnStatementTests(unittest.TestCase):
 
         expected = 'return 0;'
         actual = stutter.generate_return_statement(return_statement)
+
+        self.assertEqual(expected, actual)
+
+class GenerateDefinitionStatementTests(unittest.TestCase):
+    def test_generates_definition_statement(self):
+        definition_statement = stutter.CDefinitionStatement(
+            stutter.CType('int'),
+            'number',
+            stutter.CIntegerLiteralExpression(0),
+        )
+
+        expected = 'int number = 0;'
+        actual = stutter.generate_definition_statement(definition_statement)
 
         self.assertEqual(expected, actual)
 

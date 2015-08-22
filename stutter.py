@@ -78,7 +78,7 @@ class Symbol(object):
 TOKEN = re.compile(r'\s*({})'.format('|'.join('(?P<{}>{})'.format(*token) for token in [
     ('open_parenthese',         r'\('),
     ('close_parenthese',        r'\)'),
-    ('identifier',              r'[a-z]+'), # We can expand this as needed
+    ('identifier',              r'[a-z\-]+'), # We can expand this as needed
     ('integer_literal',         r'\d+'),
     ('string_literal',          r'"(\\"|[^"])*"'),
     ('unexpected_character',    r'.'),
@@ -133,9 +133,9 @@ class CPointerType(CType):
         self.pointer_to = pointer_to
 
 class CArgumentDeclaration(object):
-    def __init__(self, type, name):
-        assert isinstance(type, CType)
-        self.type = type
+    def __init__(self, _type, name):
+        assert isinstance(_type, CType)
+        self._type = _type
         self.name = name
 
 class CExpression(object):
@@ -168,6 +168,11 @@ class CVariableExpression(CExpression):
         assert isinstance(other, CVariableExpression)
         return self.name == other.name
 
+class CReferenceExpression(CExpression):
+    def __init__(self, referee):
+        assert isinstance(referee, CVariableExpression)
+        self.referee = referee
+
 class CFunctionCallExpression(CExpression):
     def __init__(self, name, arguments):
         assert all(isinstance(argument, CExpression) for argument in arguments)
@@ -188,6 +193,16 @@ class CExpressionStatement(CStatement):
 class CReturnStatement(CStatement):
     def __init__(self, expression):
         self.expression = expression
+
+class CDefinitionStatement(CStatement):
+    def __init__(self, _type, name, definition):
+        assert isinstance(_type, CType)
+        assert isinstance(name, str)
+        assert isinstance(definition, CExpression)
+
+        self._type = _type
+        self.name = name
+        self.definition = definition
 
 class CFunctionBody(object):
     def __init__(self, statements):
@@ -222,7 +237,13 @@ def quote_to_c(s_expression):
             [CStringLiteralExpression(s_expression)],
         )
 
-    raise Exception('Not implemented')
+    if isinstance(s_expression, Symbol):
+        return CFunctionCallExpression(
+            'getSymbol',
+            [CStringLiteralExpression(s_expression.string)],
+        )
+
+    raise Exception('Not implemented for type {}'.format(type(s_expression)))
 
 def evaluate_application_arguments_to_c(
         arguments,
@@ -249,7 +270,10 @@ def evaluate_application_to_c(
     if isinstance(s_expression[0], Symbol):
         return CFunctionCallExpression(
             s_expression[0].string,
-            (evaluate_application_arguments_to_c(s_expression[1:]),),
+            (
+                CReferenceExpression(CVariableExpression('env')),
+                evaluate_application_arguments_to_c(s_expression[1:]),
+            ),
         )
 
     raise Exception('Not implemented')
@@ -274,6 +298,11 @@ def evaluate_all_to_c(s_expressions):
     c_expressions = list(map(evaluate_to_c, s_expressions))
 
     return CFunctionBody(itertools.chain(
+        [CDefinitionStatement(
+            CPointerType(CType('Environment')),
+            'env',
+            CVariableExpression('NULL'),
+        )],
         map(CExpressionStatement, c_expressions[:-1]),
         [CReturnStatement(c_expressions[-1])],
     ))
@@ -296,7 +325,10 @@ def generate_type(
 
 def generate_argument_declaration(argument_declaration):
     assert isinstance(argument_declaration, CArgumentDeclaration)
-    return '{} {}'.format(generate_type(argument_declaration.type), argument_declaration.name)
+    return '{} {}'.format(
+        generate_type(argument_declaration._type),
+        argument_declaration.name,
+    )
 
 def generate_argument_declaration_list(argument_declarations):
     return ', '.join(generate_argument_declaration(ad) for ad in argument_declarations)
@@ -336,6 +368,10 @@ def generate_variable_expression(expression):
     assert isinstance(expression, CVariableExpression)
     return expression.name
 
+def generate_reference_expression(expression):
+    assert isinstance(expression, CReferenceExpression)
+    return '&{}'.format(generate_variable_expression(expression.referee))
+
 def generate_function_call_expression(expression):
     assert isinstance(expression, CFunctionCallExpression)
     return '{}({})'.format(
@@ -348,6 +384,7 @@ def generate_expression(
         generate_integer_literal_expression = generate_integer_literal_expression,
         generate_string_literal_expression = generate_string_literal_expression,
         generate_variable_expression = generate_variable_expression,
+        generate_reference_expression = generate_reference_expression,
         generate_function_call_expression = generate_function_call_expression,
         ):
 
@@ -360,6 +397,9 @@ def generate_expression(
     if isinstance(expression, CVariableExpression):
         return generate_variable_expression(expression)
 
+    if isinstance(expression, CReferenceExpression):
+        return generate_reference_expression(expression)
+
     if isinstance(expression, CFunctionCallExpression):
         return generate_function_call_expression(expression)
 
@@ -371,10 +411,18 @@ def generate_expression_statement(statement):
 def generate_return_statement(statement):
     return 'return {};'.format(generate_expression(statement.expression))
 
+def generate_definition_statement(statement):
+    return '{} {} = {};'.format(
+        generate_type(statement._type),
+        statement.name,
+        generate_expression(statement.definition),
+    )
+
 def generate_statement(
         statement,
         generate_expression_statement = generate_expression_statement,
-        generate_return_statement = generate_return_statement):
+        generate_return_statement = generate_return_statement,
+        generate_definition_statement = generate_definition_statement):
 
     if isinstance(statement, CExpressionStatement):
         return generate_expression_statement(statement)
@@ -382,7 +430,10 @@ def generate_statement(
     if isinstance(statement, CReturnStatement):
         return generate_return_statement(statement)
 
-    raise Exception('Handling for statements of type {} not implemented'.format(type(statement.type)))
+    if isinstance(statement, CDefinitionStatement):
+        return generate_definition_statement(statement)
+
+    raise Exception('Handling for statements of type {} not implemented'.format(type(statement)))
 
 def generate_function_body(function_body):
     assert isinstance(function_body, CFunctionBody)
@@ -408,8 +459,10 @@ def generate_function_declaration(function_declaration):
 PROGRAM_TEMPLATE = string.Template(
 '''
 #include <assert.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 struct Object;
 typedef struct Object Object;
@@ -417,9 +470,34 @@ typedef struct Object Object;
 enum Type
 {
     CELL,
-    STRING
+    STRING,
+    SYMBOL
 };
 typedef enum Type Type;
+
+#define MAX_TYPE_STRING_LENGTH 7
+
+void typeToString(Type type, char* target)
+{
+    switch(type)
+    {
+        case CELL:
+            snprintf(target, MAX_TYPE_STRING_LENGTH, "CELL");
+            return;
+
+        case STRING:
+            snprintf(target, MAX_TYPE_STRING_LENGTH, "STRING");
+            return;
+
+        case SYMBOL:
+            snprintf(target, MAX_TYPE_STRING_LENGTH, "%s", "SYMBOL");
+            return;
+
+        default:
+            fprintf(stderr, "ERROR: Unknown type");
+            exit(1);
+    }
+}
 
 struct Cell;
 typedef struct Cell Cell;
@@ -429,10 +507,41 @@ struct Cell
     Object* right;
 };
 
+struct Environment;
+typedef struct Environment Environment;
+struct Environment
+{
+    char* key;
+    Object* value;
+    Environment* next;
+};
+
+Environment makeEnvironment(char* key, Object* value, Environment* next)
+{
+    Environment result;
+    result.key = key;
+    result.value = value;
+    result.next = next;
+    return result;
+}
+
+Environment* makeEnvironmentPointerFromEnvironment(Environment env)
+{
+    Environment* result = malloc(sizeof(Environment));
+    *result = env;
+    return result;
+}
+
+Environment* makeEnvironmentPointer(char* key, Object* value, Environment* next)
+{
+    return makeEnvironmentPointerFromEnvironment(makeEnvironment(key, value, next));
+}
+
 union Instance
 {
     Cell cell;
     char* string;
+    char* symbol;
 };
 typedef union Instance Instance;
 
@@ -447,6 +556,13 @@ Instance makeInstanceFromString(char* string)
 {
     Instance result;
     result.string = string;
+    return result;
+}
+
+Instance makeInstanceFromSymbol(char* symbol)
+{
+    Instance result;
+    result.symbol = symbol;
     return result;
 }
 
@@ -474,6 +590,11 @@ Object makeObjectFromString(char* string)
     return makeObject(STRING, makeInstanceFromString(string));
 }
 
+Object makeObjectFromSymbol(char* symbol)
+{
+    return makeObject(SYMBOL, makeInstanceFromSymbol(symbol));
+}
+
 Object* makeObjectPointerFromObject(Object o)
 {
     Object* result = malloc(sizeof(Object));
@@ -489,6 +610,17 @@ Object* makeObjectPointerFromCell(Cell cell)
 Object* makeObjectPointerFromString(char* string)
 {
     return makeObjectPointerFromObject(makeObjectFromString(string));
+}
+
+Object* makeObjectPointerFromSymbol(char* symbol)
+{
+    return makeObjectPointerFromObject(makeObjectFromSymbol(symbol));
+}
+
+Object* getSymbol(char* symbol)
+{
+    // This will not always be how this is implemented
+    return makeObjectPointerFromSymbol(symbol);
 }
 
 Cell makeCell(Object* left, Object* right)
@@ -507,9 +639,57 @@ Object* c_cons(Object* left, Object* right)
 
 void c_print(Object* stutter_string)
 {
-    assert(stutter_string->type == STRING);
+    if(stutter_string->type != STRING)
+    {
+        char typeName[MAX_TYPE_STRING_LENGTH];
+        typeToString(stutter_string->type, typeName);
+        fprintf(stderr, "ERROR: Expected type STRING, got type %s.", typeName);
+        exit(1);
+    }
+
     char* c_string = stutter_string->instance.string;
     printf("%s", c_string);
+}
+
+bool c_symbol_equal(char* left, char* right)
+{
+    return strcmp(left, right) == 0;
+}
+
+Object* c_evaluate_symbol(Environment* env, Object* s)
+{
+    if(env == NULL)
+    {
+        fprintf(stderr, "ERROR: symbol %s not found.", s->instance.symbol);
+        exit(1);
+    }
+
+    if(c_symbol_equal(env->key, s->instance.symbol))
+    {
+        return env->value;
+    }
+
+    return c_evaluate_symbol(env->next, s);
+}
+
+Object* c_evaluate(Environment** env, Object* o)
+{
+    switch(o->type)
+    {
+        case STRING:
+            return o;
+
+        case SYMBOL:
+            return c_evaluate_symbol(*env, o);
+
+        default:
+            break;
+    }
+
+    char typeName[MAX_TYPE_STRING_LENGTH];
+    typeToString(o->type, typeName);
+    fprintf(stderr, "ERROR: Could not evaluate type %s.", typeName);
+    exit(1);
 }
 
 int countArgs(Object* args)
@@ -527,11 +707,21 @@ Object* getArg(int index, Object* args)
     return getArg(index - 1, args->instance.cell.right);
 }
 
-void print(Object* args)
+void print(Environment** parent, Object* args)
 {
     assert(countArgs(args) == 1);
-    Object* stutter_string = getArg(0, args);
+    Object* stutter_string = c_evaluate(parent, getArg(0, args));
     c_print(stutter_string);
+}
+
+void define(Environment** parent, Object* args)
+{
+    assert(countArgs(args) == 2);
+    Object* name = getArg(0, args);
+    Object* value = getArg(1, args);
+
+    assert(name->type == SYMBOL);
+    *parent = makeEnvironmentPointer(name->instance.symbol, value, *parent);
 }
 
 int main(int argc, char** argv)
