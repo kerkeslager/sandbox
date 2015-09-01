@@ -1,0 +1,4 @@
+(define hello-world "Hello, world")
+(define hello-world-copy hello-world)
+(print hello-world-copy)
+0

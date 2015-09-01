@@ -718,7 +718,7 @@ void define(Environment** parent, Object* args)
 {
     assert(countArgs(args) == 2);
     Object* name = getArg(0, args);
-    Object* value = getArg(1, args);
+    Object* value = c_evaluate(parent, getArg(1, args));
 
     assert(name->type == SYMBOL);
     *parent = makeEnvironmentPointer(name->instance.symbol, value, *parent);
