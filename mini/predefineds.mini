@@ -1,0 +1,71 @@
+(define cond
+  (operative cases env
+             (define cond-internal
+               (wrap (operative (cases-list) _
+                                (if (= cases-list nil)
+                                  nil
+                                  (if (evaluate (car (car cases-list)) env)
+                                    (evaluate (car (cdr (car cases-list))) env)
+                                    (cond-internal (cdr cases-list)))))))
+             (cond-internal cases)))
+
+(define cons-list-zip
+  (wrap (operative (left right) _
+                   (cond ((and (= left nil) (= right nil)) nil)
+                         ((= left nil) (assert false))
+                         ((= right nil) (assert false))
+                         (true (cons (cons (car left) (car right))
+                                     (cons-list-zip (cdr left) (cdr right))))))))
+
+# Maybe environments should have been association lists
+(define merge-association-list-with-cons-dict
+  (wrap (operative (a-list cons-dict) _
+                   (if (= a-list nil)
+                     cons-dict
+                     (merge-association-list-with-cons-dict
+                       (cdr a-list)
+                       (cons-dict-set cons-dict (car (car a-list)) (cdr (car a-list))))))))
+
+(define cons-list-map
+  (wrap (operative (f xs) _
+                   (if (= xs nil)
+                     nil
+                     (cons (f (car xs)) (cons-list-map f (cdr xs)))))))
+
+(define function
+  (operative outer-args outer-env
+             (define arg-binding (car outer-args))
+             (define function-body (cdr outer-args))
+
+             (define initial-function-env (cons-dict-set nil :__parent__ outer-env))
+
+             (wrap (operative inner-args inner-env
+                              (define function-env
+                                (cond ((identifier? arg-binding) (cons-dict-set initial-function-env
+                                                                                (identifier->symbol arg-binding)
+                                                                                inner-args))
+                                      ((cons-list? arg-binding) (merge-association-list-with-cons-dict (cons-list-zip (cons-list-map identifier->symbol arg-binding) inner-args)
+                                                                                                       initial-function-env))
+                                      (true (assert "Must be an identifier or a cons-list" false))))
+                              (evaluate-expressions function-body function-env)))))
+
+(define and (operative (left right) env
+                       (if (evaluate left env)
+                         (evaluate right env)
+                         false)))
+
+(define or (operative (left right) env
+                      (if (evaluate left env)
+                        true
+                        (evaluate right env))))
+
+(define quote (operative (quoted-expression) _ quoted-expression))
+
+(define nil? (operative (expression) env
+                        (= (evaluate expression env) nil)))
+
+(define get-current-environment
+        (wrap (operative () env env)))
+
+(define cons-list
+        (wrap (operative items _ items)))

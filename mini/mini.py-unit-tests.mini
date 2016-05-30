@@ -1,0 +1,262 @@
+# feature tests: variables
+(assert "Evaluating undefined variable throws exception"
+        (throws? undefined-identifier "UndefinedIdentifierError"))
+
+# pair tests
+(assert "`car` retrieves first argument to `cons`"
+        (car (cons true false)))
+(assert "`cdr` retrieves first argument to `cons`"
+        (cdr (cons false true)))
+
+# `=` tests
+(assert "`=` returns true for equal numbers" (= 0 0))
+(assert "`=` returns false for non-equal numbers" (not (= 0 1)))
+(assert "`=` returns true for equal strings" (= "Hello, world" "Hello, world"))
+(assert "`=` returns false for non-equal strings" (not (= "Hello, world" "Goodnight, moon")))
+(assert "`=` returns true for equal true values" (= true true))
+(assert "`=` returns true for equal false values" (= false false))
+(assert "`=` returns true for nils" (= nil nil))
+(assert "`=` returns true for equal symbols" (= :symbol :symbol))
+(assert "`=` returns false for non-equal symbols" (not (= :symbol :not-the-same)))
+(assert "`=` returns false for symbol-to-string comparison (string first)"
+        (not (= :symbol ":symbol")))
+(assert "`=` returns false for symbol-to-string comparison (symbol first)"
+        (not (= ":symbol" :symbol)))
+
+# `+` tests
+(assert "`+` adds" (= (+ 1 2) 3))
+
+# `-` tests
+(assert "`-` subtracts" (= (- 3 2) 1))
+
+# `*` tests
+(assert "`*` divides" (= (* 2 3) 6))
+
+# `/` tests
+(assert "`/` divides evenly" (= (/ 6 3) 2))
+(assert "`/` divides fractionally" (= (/ 7 2) 3.5))
+
+# `//` tests
+(assert "`//` divides evenly" (= (// 6 3) 2))
+(assert "`//` divides integrally" (= (// 7 2) 3))
+
+# `and` tests
+(assert "`and` returns false for both false" (not (and false false)))
+(assert "`and` returns false for left false and right true" (not (and false true)))
+(assert "`and` returns false for left true and right false" (not (and true false)))
+(assert "`and` returns true for both true" (and true true))
+(assert "`and` doesn't evalueate second argument if first is false" (not (and false (/ 1 0))))
+
+# `assert` tests
+(assert "`assert` executes without exception for true assertion" true)
+(assert "`assert` returns nil for true assertion" (= (assert true) nil))
+(assert "`assert` throws AssertionError for false assertion"
+        (throws? (assert false) "AssertionError"))
+(assert "`assert` throws TypeError for non-boolean assertion"
+        (throws? (assert 1) "TypeError"))
+(assert "`assert` can take multiple arguments" false true)
+(assert "`assert` executes assertion in a nested scope"
+        (assert "define identifier in nested scope"
+                (define identifier-in-nested-scope true)
+                true)
+        (not (defined? identifier-in-nested-scope)))
+
+# `merge-association-list-with-cons-dict` tests
+(assert "merge-association-list-with-cons-dict returns cons-dict"
+        (= :value
+           (cons-dict-get (merge-association-list-with-cons-dict (cons-list-zip (cons-list :key) (cons-list :value))
+                                                                 nil)
+                          :key)))
+
+# `concatenate` tests
+(assert "`concatenate` concatenates strings"
+        (= (concatenate "Hello, " "world")
+           "Hello, world"))
+
+# `cond` tests
+(assert "`cond` returns nil for no conditions"
+        (= (cond) nil))
+(assert "`cond` returns nil for no true conditions"
+        (= (cond (false :not-returned)
+                 (false :also-not-returned))
+           nil))
+(assert "`cond` returns true when pair evaluates to true"
+        (= (cond (false :not-returned)
+                 (true :returned)
+                 (false :also-not-returned))
+           :returned))
+(assert "`cond` does not execute bodies for false conditions"
+        (= (cond (false (/ 1 0))
+                 (true :returned))
+           :returned))
+
+# `cons-dict` tests
+(assert "`cons-dict-get` returns association created by `cons-dict-set`"
+        (cons-dict-get (cons-dict-set nil :key true) :key))
+
+# `cons-list` tests
+(assert "`cons-list` first argument is first item"
+        (car (cons-list true)))
+(assert "`cons-list` terminated by null cdr"
+        (= (cdr (cons-list false)) nil))
+
+# `cons-list?` tests
+(assert "`cons-list?` returns true for nil"
+        (cons-list? nil))
+(assert "`cons-list?` returns true for cons-list"
+        (cons-list? (cons-list 1 2 3)))
+(assert "`cons-list?` returns false for non cons-list"
+        (not (cons-list? 1)))
+
+# `cons-list-map` tests
+(assert "`cons-list-map` returns empty list for empty list"
+        (= (cons-list-map identifier->symbol nil) nil))
+(assert "`cons-list-map` calls mapping function on items"
+        (define inc (wrap (operative (i) _ (+ i 1))))
+        (define mapped (cons-list-map inc (cons-list 1 2)))
+        (and (= 2 (car mapped))
+             (= 3 (car (cdr mapped)))))
+
+# `cons-list-zip` tests
+(assert "`cons-list-zip` returns nil for empty lists"
+        (= (cons-list-zip nil nil) nil))
+(assert "`cons-list-zip` returns association list"
+        (define a-list (cons-list-zip (cons-list :a) (cons-list :b)))
+        (and (= :a (car (car a-list)))
+             (= :b (cdr (car a-list)))))
+
+# `define` tests
+(assert "`define` adds identifier to environment"
+        (define previously-undefined-identifier true)
+        previously-undefined-identifier)
+(assert "`define` throws exception for already-defined variable"
+        (define already-defined-identifier :value)
+        (throws? (define already-defined-identifier :another-value) "AlreadyDefinedError"))
+
+# `defined?` tests
+(assert "`defined?` returns true for defined identifier"
+        (define identifier :value)
+        (defined? identifier))
+(assert "`defined?` returns false for undefined identifier"
+        (not (defined? undefined-identifier)))
+
+# `function` tests
+(assert "`function` creates function that returns body"
+        ((function _ true)))
+(assert "`function` closes around defining environment"
+        (define defining-environment-identifier true)
+        ((function _ defining-environment-identifier)))
+(assert "`function` with an identifier arg binding receives list"
+        (and (= ((function args (car args)) :arg) :arg)
+             (= ((function args (cdr args)) :arg) nil)))
+(assert "`function` with an s-expression arg binding receives arguments bound to names"
+        (and (= ((function (foo bar) foo) :baz :qux) :baz)
+             (= ((function (foo bar) bar) :baz :qux) :qux)))
+(assert "`function` can recurse"
+        (define factorial (function (n) (if (= n 1) 1 (* n (factorial (- n 1))))))
+        (and (= 6 (factorial 3))
+             (= 120 (factorial 5))))
+
+# `get-current-environment` tests
+(assert "`get-current-environment` contains local variables as symbols"
+        (define local-identifier true)
+        (cons-dict-get (get-current-environment) :local-identifier))
+(assert "`get-current-environment` contains parent scope under :__parent__"
+        (define parent-identifier true)
+        (assert (cons-dict-get (cons-dict-get (get-current-environment) :__parent__) :parent-identifier))
+        true)
+
+# `identifier->symbol` tests
+(assert "`identifier->symbol` returns a symbol when given an identifier"
+        (= (identifier->symbol (quote identifier)) :identifier))
+
+# `identifier?` tests
+(assert "`identifier?` returns true for identifier"
+        (identifier? (quote identifier)))
+(assert "`identifier?` returns false for non-identifier"
+        (not (identifier? 1)))
+
+# `if` tests
+(assert "`if` returns second argument for true condition"
+        (if true true false))
+(assert "`if` returns third argument for false condition"
+        (if false false true))
+(assert "`if` doesn't execute third argument for true condition"
+        (if true true undefined-identifier))
+(assert "`if` doesn't execute second argument for false condition"
+        (if false undefined-identifier true))
+
+# `length` tests
+(assert "`length` returns length of string"
+        (= 12 (length "Hello, world")))
+
+# `not` tests
+(assert "`not` returns false for true" (= (not true) false))
+(assert "`not` returns true for false" (= (not false) true))
+(assert "`not` throws TypeError for non-boolean argument"
+        (throws? (not 1) "TypeError"))
+
+# `operative` tests
+(assert "`operative` creates callable operative"
+        ((operative () env true)))
+(assert "`operative` receives the environment"
+        (define receives-environment (operative () env (evaluate (quote true-identifier) env)))
+        (define true-identifier true)
+        (receives-environment))
+(assert "`operative` receives arguments"
+        ((operative (arg) env (evaluate arg env)) true))
+(assert "`operative` executes in its own environment"
+        ((operative () env
+                    (define should-not-be-defined false)))
+        (not (defined? should-not-be-defined)))
+(assert "`operative` doesn't evaluate its arguments"
+        ((operative (arg) env true) (/ 1 0)))
+(assert "`operative` with a symbol argument receives a cons-linked-list"
+        (and (= ((operative argument-list env (car argument-list)) 1) 1)
+             (= ((operative argument-list env (cdr argument-list)) 1) nil)))
+(assert "`operative` argument lists nest"
+        (and (= ((operative argument-list env (car (car argument-list))) (1)) 1)
+             (= ((operative argument-list env (cdr (car argument-list))) (1)) nil)))
+(assert "`operative` with an s-expression argument still receives lists"
+        (and (= ((operative (arg) env (car arg)) (1)) 1)
+             (= ((operative (arg) env (cdr arg)) (1)) nil)))
+(assert "`operative` executes body in a nested scope"
+        ((operative () env
+                    (define defined-in-nested-scope :value)
+                    (assert (defined? defined-in-nested-scope))))
+        (not (defined? defined-in-nested-scope)))
+(assert "`operative` with no args receives nil"
+        (= ((operative args-list _ args-list)) nil))
+
+# `or` tests
+(assert "`or` returns false for both false" (not (or false false)))
+(assert "`or` returns true for left false and right true" (or false true))
+(assert "`or` returns true for left true and right false" (or true false))
+(assert "`or` returns true for both true" (or true true))
+(assert "`or` doesn't evalueate second argument if first is true" (or true (/ 1 0)))
+
+# `read` tests
+(assert "`read` reads identifiers"
+    (= (identifier->symbol (read "identifier")) :identifier))
+
+# `slice` tests
+(assert "`slice` returns a slice of a string"
+        (= (slice "Hello, world" 1 11) "ello, worl"))
+(assert "`slice` uses start of string if start index is nil"
+        (= (slice "Hello, world" nil 11) "Hello, worl"))
+(assert "`slice` uses end of string if end index is nil"
+        (= (slice "Hello, world" 1 nil) "ello, world"))
+(assert "`slice` counts backward if start or end is negative"
+        (= (slice "Hello, world" -11 -1) "ello, worl"))
+
+# `throws?` tests
+(assert "`throws?` returns false when no exception is thrown"
+        (not (throws? (assert true) "AssertionError")))
+(assert "`throws?` returns true when the correct exception is thrown"
+        (throws? (assert false) "AssertionError"))
+(assert "`throws?` doesn't catch when the wrong exception is thrown"
+        (throws? (throws? (assert false) "TypeError") "AssertionError"))
+
+# `wrap` tests
+(assert "`wrap` evaluates arguments to wrapped operative"
+        ((wrap (operative (input) _ input)) (= 1 1)))

@@ -1,0 +1,7 @@
+(define repl (function () (print "repl")))
+
+(define run-file (function (file args) (print (read-file file))))
+
+(if (= __arguments__ nil)
+  (repl)
+  (run-file (car __arguments__) (cdr __arguments__)))
