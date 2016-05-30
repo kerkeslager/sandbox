@@ -1,2 +1,6 @@
 *.out
 *.pyc
+a.out.c
+.env
+*.pyc
+*.swp
