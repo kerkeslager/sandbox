@@ -106,7 +106,6 @@ void* dequeue(Queue* queue)
 void freeQueue(Queue* queue, void (*itemFreer)(void*))
 {
   QueueNode* current = queue->head;
-  free(queue);
 
   while(current != NULL)
   {
@@ -115,9 +114,4 @@ void freeQueue(Queue* queue, void (*itemFreer)(void*))
     free(current);
     current = temp;
   }
-}
-
-int main(int argc, char** argv)
-{
-  return EXIT_SUCCESS;
 }
