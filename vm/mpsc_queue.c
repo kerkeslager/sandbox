@@ -1,17 +1,20 @@
+#ifndef MPSC_QUEUE
+#define MPSC_QUEUE
+
 #include <stdbool.h>
 #include <stdlib.h>
 
-struct Queue;
-typedef struct Queue Queue;
-struct QueueNode;
-typedef struct QueueNode QueueNode;
+struct MPSCQueue;
+typedef struct MPSCQueue MPSCQueue;
+struct MPSCQueueNode;
+typedef struct MPSCQueueNode MPSCQueueNode;
 
-void initializeQueue(Queue* queue);
-void enqueue(Queue* queue, void* item);
-void* dequeue(Queue* queue);
-void freeQueue(Queue* queue, void (*itemFreer)(void*));
+void initializeMPSCQueue(MPSCQueue* queue);
+void enqueue(MPSCQueue* queue, void* item);
+void* dequeue(MPSCQueue* queue);
+void destructMPSCQueue(MPSCQueue* queue, void (*itemFreer)(void*));
 
-struct Queue
+struct MPSCQueue
 {
   // This implements a multiple-producer, single-consumer lockless concurrent
   // queue.
@@ -24,35 +27,35 @@ struct Queue
   //    dequeued. In fact, `head->item` may have been freed after it was
   //    dequeued, so we should never dereference it.
   // 2. At initialization, no item has been dequeued yet, so we must allocate
-  //    an extra `QueueNode` at initialization which will never be used to
+  //    an extra `MPSCQueueNode` at initialization which will never be used to
   //    store an item.
   //
   // However, this extra memory allocation at initialization means that we
   // never have to check whether `head` or `tail` are `NULL`, or initialize
   // these variables concurrently, which are expensive operations.
-  QueueNode* head;
-  QueueNode* tail;
+  MPSCQueueNode* head;
+  MPSCQueueNode* tail;
 };
 
-struct QueueNode
+struct MPSCQueueNode
 {
   // This implements a singly-linked list.
   void* item;
-  QueueNode* next;
+  MPSCQueueNode* next;
 };
 
-void initializeQueue(Queue* queue)
+void initializeMPSCQueue(MPSCQueue* queue)
 {
   // Initialize the queue with a node that fakes the previously dequeued item.
   // We don't have to initialize `dummyNode->item` because it will never be
   // used.
-  QueueNode* dummyNode = malloc(sizeof(QueueNode));
+  MPSCQueueNode* dummyNode = malloc(sizeof(MPSCQueueNode));
   dummyNode->next = NULL;
   queue->head = dummyNode;
   queue->tail = dummyNode;
 }
 
-bool isEmpty(Queue* queue)
+bool isEmpty(MPSCQueue* queue)
 {
   // In a normal singly-linked list, the list is empty when the `head` is
   // `NULL`, but here the queue is empty when the `head` is the same as the
@@ -60,10 +63,10 @@ bool isEmpty(Queue* queue)
   return queue->head == queue->tail;
 }
 
-void enqueue(Queue* queue, void* item)
+void enqueue(MPSCQueue* queue, void* item)
 {
   // Create the node that will be the new tail.
-  QueueNode* node = malloc(sizeof(QueueNode));
+  MPSCQueueNode* node = malloc(sizeof(MPSCQueueNode));
   node->item = item;
   node->next = NULL;
 
@@ -82,36 +85,38 @@ void enqueue(Queue* queue, void* item)
   // We don't have to worry that another thread might have appended more
   // nodes; advancing `queue->tail` to the end of the linked list is always
   // the correct thing to do.
-  QueueNode* tail;
+  MPSCQueueNode* tail;
   while((tail = queue->tail)->next != NULL)
   {
     __sync_val_compare_and_swap(&(queue->tail), tail, tail->next);
   }
 }
 
-void* dequeue(Queue* queue)
+void* dequeue(MPSCQueue* queue)
 {
   if(isEmpty(queue))
   {
     return NULL; // TODO Provide ability to return a defined default.
   }
 
-  QueueNode* oldHead = queue->head;
+  MPSCQueueNode* oldHead = queue->head;
   queue->head = oldHead->next;
   free(oldHead);
 
   return queue->head->item;
 }
 
-void freeQueue(Queue* queue, void (*itemFreer)(void*))
+void destructMPSCQueue(MPSCQueue* queue, void (*itemFreer)(void*))
 {
-  QueueNode* current = queue->head;
+  MPSCQueueNode* current = queue->head;
 
   while(current != NULL)
   {
     itemFreer(current->item);
-    QueueNode* temp = current->next;
+    MPSCQueueNode* temp = current->next;
     free(current);
     current = temp;
   }
 }
+
+#endif

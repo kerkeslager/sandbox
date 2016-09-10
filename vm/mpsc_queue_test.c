@@ -7,8 +7,8 @@ void noopFreer(void* _) { }
 
 bool test_single_threaded()
 {
-  Queue queue;
-  initializeQueue(&queue);
+  MPSCQueue queue;
+  initializeMPSCQueue(&queue);
 
   int inputs[] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 };
 
@@ -30,7 +30,7 @@ bool test_single_threaded()
     assert(i == *(outputs[i]));
   }
 
-  freeQueue(&queue, noopFreer);
+  freeMPSCQueue(&queue, noopFreer);
 
   return true;
 }
