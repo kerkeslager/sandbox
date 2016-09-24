@@ -26,6 +26,37 @@ class SerializeTests(unittest.TestCase):
             b'\x02',
         )
 
+    def test_serializes_unsigned_integer_types(self):
+        self.assertEqual(
+            binary.serialize(binary.TaggedObject(
+                tag = binary.TAG_UINT8,
+                instance = 7,
+            )),
+            b'\x03\x07',
+        )
+        self.assertEqual(
+            binary.serialize(binary.TaggedObject(
+                tag = binary.TAG_UINT16,
+                instance = 7,
+            )),
+            b'\x04\x00\x07',
+        )
+        self.assertEqual(
+            binary.serialize(binary.TaggedObject(
+                tag = binary.TAG_UINT32,
+                instance = 7,
+            )),
+            b'\x05\x00\x00\x00\x07',
+        )
+        self.assertEqual(
+            binary.serialize(binary.TaggedObject(
+                tag = binary.TAG_UINT64,
+                instance = 7,
+            )),
+            b'\x06\x00\x00\x00\x00\x00\x00\x00\x07',
+        )
+
+
 class DeserializeTests(unittest.TestCase):
     def test_deserializes_tag_only_types(self):
         self.assertEqual(
