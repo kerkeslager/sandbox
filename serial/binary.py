@@ -10,6 +10,10 @@ TAG_UINT8 = 0x03
 TAG_UINT16 = 0x04
 TAG_UINT32 = 0x05
 TAG_UINT64 = 0x06
+TAG_INT8 = 0x10
+TAG_INT16 = 0x11
+TAG_INT32 = 0x12
+TAG_INT64 = 0x13
 
 TaggedObject = collections.namedtuple(
     'TaggedObject',
@@ -45,6 +49,10 @@ _TAGS_TO_SERIALIZERS = {
     TAG_UINT16: _make_struct_serializer('H'),
     TAG_UINT32: _make_struct_serializer('I'),
     TAG_UINT64: _make_struct_serializer('Q'),
+    TAG_INT8: _make_struct_serializer('b'),
+    TAG_INT16: _make_struct_serializer('h'),
+    TAG_INT32: _make_struct_serializer('i'),
+    TAG_INT64: _make_struct_serializer('q'),
 }
 
 def serialize(to):
@@ -76,6 +84,10 @@ _TAGS_TO_PARSERS = {
     TAG_UINT16: _make_struct_deserializer(TAG_UINT16, 'H'),
     TAG_UINT32: _make_struct_deserializer(TAG_UINT32, 'I'),
     TAG_UINT64: _make_struct_deserializer(TAG_UINT64, 'Q'),
+    TAG_INT8: _make_struct_deserializer(TAG_INT8, 'b'),
+    TAG_INT16: _make_struct_deserializer(TAG_INT16, 'h'),
+    TAG_INT32: _make_struct_deserializer(TAG_INT32, 'i'),
+    TAG_INT64: _make_struct_deserializer(TAG_INT64, 'q'),
 }
 
 def deserialize(b):
