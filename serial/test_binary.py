@@ -2,83 +2,36 @@ import unittest
 
 import binary
 
+EXAMPLE_REPRESENTATIONS = [
+    (binary.TAG_NULL, None, b'\x00'),
+    (binary.TAG_TRUE, True, b'\x01'),
+    (binary.TAG_FALSE, False, b'\x02'),
+    (binary.TAG_UINT8, 7, b'\x03\x07'),
+    (binary.TAG_UINT16, 7, b'\x04\x00\x07'),
+    (binary.TAG_UINT32, 7, b'\x05\x00\x00\x00\x07'),
+    (binary.TAG_UINT64, 7, b'\x06\x00\x00\x00\x00\x00\x00\x00\x07'),
+]
+
 class SerializeTests(unittest.TestCase):
-    def test_serializes_tag_only_types(self):
-        self.assertEqual(
-            binary.serialize(binary.TaggedObject(
-                tag = binary.TAG_NULL,
-                instance = None,
-            )),
-            b'\x00',
-        )
-        self.assertEqual(
-            binary.serialize(binary.TaggedObject(
-                tag = binary.TAG_TRUE,
-                instance = True,
-            )),
-            b'\x01',
-        )
-        self.assertEqual(
-            binary.serialize(binary.TaggedObject(
-                tag = binary.TAG_FALSE,
-                instance = False,
-            )),
-            b'\x02',
-        )
-
-    def test_serializes_unsigned_integer_types(self):
-        self.assertEqual(
-            binary.serialize(binary.TaggedObject(
-                tag = binary.TAG_UINT8,
-                instance = 7,
-            )),
-            b'\x03\x07',
-        )
-        self.assertEqual(
-            binary.serialize(binary.TaggedObject(
-                tag = binary.TAG_UINT16,
-                instance = 7,
-            )),
-            b'\x04\x00\x07',
-        )
-        self.assertEqual(
-            binary.serialize(binary.TaggedObject(
-                tag = binary.TAG_UINT32,
-                instance = 7,
-            )),
-            b'\x05\x00\x00\x00\x07',
-        )
-        self.assertEqual(
-            binary.serialize(binary.TaggedObject(
-                tag = binary.TAG_UINT64,
-                instance = 7,
-            )),
-            b'\x06\x00\x00\x00\x00\x00\x00\x00\x07',
-        )
-
+    def test_serialize(self):
+        for tag, instance, representation in EXAMPLE_REPRESENTATIONS:
+            self.assertEqual(
+                binary.serialize(binary.TaggedObject(
+                    tag = tag,
+                    instance = instance,
+                )),
+                representation,
+            )
 
 class DeserializeTests(unittest.TestCase):
-    def test_deserializes_tag_only_types(self):
-        self.assertEqual(
-            binary.deserialize(b'\x00'),
-            binary.TaggedObject(
-                tag = binary.TAG_NULL,
-                instance = None,
-            ),
-        )
-        self.assertEqual(
-            binary.deserialize(b'\x01'),
-            binary.TaggedObject(
-                tag = binary.TAG_TRUE,
-                instance = True,
-            ),
-        )
-        self.assertEqual(
-            binary.deserialize(b'\x02'),
-            binary.TaggedObject(
-                tag = binary.TAG_FALSE,
-                instance = False,
+    def test_deserialize(self):
+        for tag, instance, representation in EXAMPLE_REPRESENTATIONS:
+            self.assertEqual(
+                binary.deserialize(representation),
+                binary.TaggedObject(
+                    tag = tag,
+                    instance = instance,
+                ),
             )
-        )
 
 unittest.main()

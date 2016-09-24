@@ -56,10 +56,26 @@ def _make_tag_only_parser(tag, value):
 
     return parser
 
+def _make_struct_deserializer(tag, fmt):
+    fmt = '!' + fmt
+    size = struct.calcsize(fmt)
+    unpacker = functools.partial(struct.unpack, fmt)
+
+    def parser(b):
+        b = b.read(size)
+        assert len(b) == size
+        return TaggedObject(tag = tag, instance = unpacker(b)[0])
+
+    return parser
+
 _TAGS_TO_PARSERS = {
     TAG_NULL: _make_tag_only_parser(TAG_NULL, None),
     TAG_TRUE: _make_tag_only_parser(TAG_TRUE, True),
     TAG_FALSE: _make_tag_only_parser(TAG_FALSE, False),
+    TAG_UINT8: _make_struct_deserializer(TAG_UINT8, 'B'),
+    TAG_UINT16: _make_struct_deserializer(TAG_UINT16, 'H'),
+    TAG_UINT32: _make_struct_deserializer(TAG_UINT32, 'I'),
+    TAG_UINT64: _make_struct_deserializer(TAG_UINT64, 'Q'),
 }
 
 def deserialize(b):
