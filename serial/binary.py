@@ -1,4 +1,5 @@
 import collections
+import io
 
 TAG_NULL = 0x00
 TAG_TRUE = 0x01
@@ -32,7 +33,7 @@ def serialize(to):
 
 def _make_tag_only_parser(tag, value):
     def parser(b):
-        return TaggedObject(tag = tag, instance = value), b
+        return TaggedObject(tag = tag, instance = value)
 
     return parser
 
@@ -43,7 +44,14 @@ _TAGS_TO_PARSERS = {
 }
 
 def deserialize(b):
-    result, remainder = _TAGS_TO_PARSERS[b[0]](b[1:])
+    if isinstance(b, bytes):
+        b = io.BytesIO(b)
+
+    tag = b.read(1)[0]
+
+    result = _TAGS_TO_PARSERS[tag](b)
+
+    remainder = b.read()
 
     if len(remainder) == 0:
         return result
