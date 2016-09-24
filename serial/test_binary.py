@@ -22,6 +22,10 @@ EXAMPLE_REPRESENTATIONS = [
     (binary.TAG_INT16, -2, b'\x11\xff\xfe'),
     (binary.TAG_INT32, -2, b'\x12\xff\xff\xff\xfe'),
     (binary.TAG_INT64, -2, b'\x13\xff\xff\xff\xff\xff\xff\xff\xfe'),
+    (binary.TAG_BINARY, b'\xde\xad\xbe\xef', b'\x20\x00\x00\x00\x04\xde\xad\xbe\xef'),
+    (binary.TAG_UTF8, 'Lol!', b'\x21\x00\x00\x00\x04Lol!'),
+    (binary.TAG_UTF16, 'かわ', b'\x22\x00\x00\x00\x06\xff\xfeK0\x8f0'),
+    (binary.TAG_UTF32, '漢', b'\x23\x00\x00\x00\x08\xff\xfe\x00\x00"o\x00\x00'),
 ]
 
 class SerializeTests(unittest.TestCase):
