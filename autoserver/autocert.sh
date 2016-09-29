@@ -8,5 +8,8 @@ sudo apt-get -y install certbot -t jessie-backports
 # Generate cert
 sudo certbot certonly --webroot -w /var/www/site -d kerkeslager.com -d www.kerkeslager.com
 
+# Generate stronger Diffie-Hellman parameters
+sudo openssl dhparam -out /etc/letsencrypt/live/kerkeslager.com/dhparam.pem 4096
+
 # Restart nginx
 sudo service nginx restart
