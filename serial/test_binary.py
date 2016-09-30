@@ -1,6 +1,6 @@
 import unittest
 
-import binary
+from serial import binary
 
 EXAMPLE_REPRESENTATIONS = [
     (binary.TaggedObject(binary.TAG_NULL, None), b'\x00'),
