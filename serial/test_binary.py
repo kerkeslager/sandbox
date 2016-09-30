@@ -26,22 +26,34 @@ EXAMPLE_REPRESENTATIONS = [
     (binary.TaggedObject(binary.TAG_UTF8, 'Lol!'), b'\x21\x00\x00\x00\x04Lol!'),
     (binary.TaggedObject(binary.TAG_UTF16, 'かわ'), b'\x22\x00\x00\x00\x06\xff\xfeK0\x8f0'),
     (binary.TaggedObject(binary.TAG_UTF32, '漢'), b'\x23\x00\x00\x00\x08\xff\xfe\x00\x00"o\x00\x00'),
+    (
+        binary.TaggedObject(
+            binary.TAG_TUPLE,
+            (
+                binary.TaggedObject(
+                    binary.TAG_TRUE,
+                    True,
+                ),
+                binary.TaggedObject(
+                    binary.TAG_UINT8,
+                    7,
+                ),
+            ),
+        ),
+        b'\x30\x00\x00\x00\x03\x01\x03\x07'
+    ),
 ]
 
 class SerializeTests(unittest.TestCase):
     def test_serialize(self):
-        for tagged_object, representation in EXAMPLE_REPRESENTATIONS:
-            self.assertEqual(
-                binary.serialize(tagged_object),
-                representation,
-            )
+        for tagged_object, expected in EXAMPLE_REPRESENTATIONS:
+            actual = binary.serialize(tagged_object)
+            self.assertEqual(expected, actual)
 
 class DeserializeTests(unittest.TestCase):
     def test_deserialize(self):
-        for tagged_object, representation in EXAMPLE_REPRESENTATIONS:
-            self.assertEqual(
-                binary.deserialize(representation),
-                tagged_object,
-            )
+        for expected, representation in EXAMPLE_REPRESENTATIONS:
+            actual = binary.deserialize(representation)
+            self.assertEqual(expected, actual)
 
 unittest.main()
