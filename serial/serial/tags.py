@@ -1,3 +1,5 @@
+import collections
+
 NULL = 0x00
 TRUE = 0x01
 FALSE = 0x02
@@ -14,3 +16,11 @@ UTF8 = 0x21
 UTF16 = 0x22
 UTF32 = 0x23
 TUPLE = 0x30
+
+TaggedObject = collections.namedtuple(
+    'TaggedObject',
+    [
+        'tag',
+        'instance',
+    ],
+)

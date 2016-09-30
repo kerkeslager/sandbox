@@ -1,17 +1,8 @@
-import collections
 import functools
 import io
 import struct
 
-from . import tag
-
-TaggedObject = collections.namedtuple(
-    'TaggedObject',
-    [
-        'tag',
-        'instance',
-    ],
-)
+from . import tags
 
 def _make_tag_only_serializer(tag, expected_value):
     tag = bytes([tag])
@@ -47,26 +38,26 @@ def _serialize_tuple(to):
 
     fmt = '!BI'
 
-    return struct.pack('!BI', tag.TUPLE, len(payload)) + payload
+    return struct.pack('!BI', tags.TUPLE, len(payload)) + payload
 
 
 _TAGS_TO_SERIALIZERS = {
-    tag.NULL: _make_tag_only_serializer(tag.NULL, None),
-    tag.TRUE: _make_tag_only_serializer(tag.TRUE, True),
-    tag.FALSE: _make_tag_only_serializer(tag.FALSE, False),
-    tag.UINT8: _make_struct_serializer('B'),
-    tag.UINT16: _make_struct_serializer('H'),
-    tag.UINT32: _make_struct_serializer('I'),
-    tag.UINT64: _make_struct_serializer('Q'),
-    tag.INT8: _make_struct_serializer('b'),
-    tag.INT16: _make_struct_serializer('h'),
-    tag.INT32: _make_struct_serializer('i'),
-    tag.INT64: _make_struct_serializer('q'),
-    tag.BINARY: _make_string_serializer(lambda s: s),
-    tag.UTF8: _make_string_serializer(lambda s: s.encode('utf-8')),
-    tag.UTF16: _make_string_serializer(lambda s: s.encode('utf-16')),
-    tag.UTF32: _make_string_serializer(lambda s: s.encode('utf-32')),
-    tag.TUPLE: _serialize_tuple,
+    tags.NULL: _make_tag_only_serializer(tags.NULL, None),
+    tags.TRUE: _make_tag_only_serializer(tags.TRUE, True),
+    tags.FALSE: _make_tag_only_serializer(tags.FALSE, False),
+    tags.UINT8: _make_struct_serializer('B'),
+    tags.UINT16: _make_struct_serializer('H'),
+    tags.UINT32: _make_struct_serializer('I'),
+    tags.UINT64: _make_struct_serializer('Q'),
+    tags.INT8: _make_struct_serializer('b'),
+    tags.INT16: _make_struct_serializer('h'),
+    tags.INT32: _make_struct_serializer('i'),
+    tags.INT64: _make_struct_serializer('q'),
+    tags.BINARY: _make_string_serializer(lambda s: s),
+    tags.UTF8: _make_string_serializer(lambda s: s.encode('utf-8')),
+    tags.UTF16: _make_string_serializer(lambda s: s.encode('utf-16')),
+    tags.UTF32: _make_string_serializer(lambda s: s.encode('utf-32')),
+    tags.TUPLE: _serialize_tuple,
 }
 
 def serialize(to):
@@ -74,7 +65,7 @@ def serialize(to):
 
 def _make_tag_only_parser(tag, value):
     def parser(b):
-        return 0, TaggedObject(tag = tag, instance = value)
+        return 0, tags.TaggedObject(tag = tag, instance = value)
 
     return parser
 
@@ -86,7 +77,7 @@ def _make_struct_deserializer(tag, fmt):
     def parser(b):
         b = b.read(size)
         assert len(b) == size
-        return size, TaggedObject(tag = tag, instance = unpacker(b)[0])
+        return size, tags.TaggedObject(tag = tag, instance = unpacker(b)[0])
 
     return parser
 
@@ -109,7 +100,7 @@ def _make_string_deserializer(tag, decoder):
 
     def parser(b):
         bytes_read, payload = _read_length_then_payload(b)
-        return bytes_read, TaggedObject(tag = tag, instance = decoder(payload))
+        return bytes_read, tags.TaggedObject(tag = tag, instance = decoder(payload))
 
     return parser
 
@@ -126,25 +117,25 @@ def _deserialize_tuple(b):
         total_bytes_read += partial_bytes_read
         instance.append(item)
 
-    return bytes_read, TaggedObject(tag = tag.TUPLE, instance = tuple(instance))
+    return bytes_read, tags.TaggedObject(tag = tags.TUPLE, instance = tuple(instance))
 
 _TAGS_TO_PARSERS = {
-    tag.NULL: _make_tag_only_parser(tag.NULL, None),
-    tag.TRUE: _make_tag_only_parser(tag.TRUE, True),
-    tag.FALSE: _make_tag_only_parser(tag.FALSE, False),
-    tag.UINT8: _make_struct_deserializer(tag.UINT8, 'B'),
-    tag.UINT16: _make_struct_deserializer(tag.UINT16, 'H'),
-    tag.UINT32: _make_struct_deserializer(tag.UINT32, 'I'),
-    tag.UINT64: _make_struct_deserializer(tag.UINT64, 'Q'),
-    tag.INT8: _make_struct_deserializer(tag.INT8, 'b'),
-    tag.INT16: _make_struct_deserializer(tag.INT16, 'h'),
-    tag.INT32: _make_struct_deserializer(tag.INT32, 'i'),
-    tag.INT64: _make_struct_deserializer(tag.INT64, 'q'),
-    tag.BINARY: _make_string_deserializer(tag.BINARY, lambda b: b),
-    tag.UTF8: _make_string_deserializer(tag.UTF8, lambda b: b.decode('utf-8')),
-    tag.UTF16: _make_string_deserializer(tag.UTF16, lambda b: b.decode('utf-16')),
-    tag.UTF32: _make_string_deserializer(tag.UTF32, lambda b: b.decode('utf-32')),
-    tag.TUPLE: _deserialize_tuple,
+    tags.NULL: _make_tag_only_parser(tags.NULL, None),
+    tags.TRUE: _make_tag_only_parser(tags.TRUE, True),
+    tags.FALSE: _make_tag_only_parser(tags.FALSE, False),
+    tags.UINT8: _make_struct_deserializer(tags.UINT8, 'B'),
+    tags.UINT16: _make_struct_deserializer(tags.UINT16, 'H'),
+    tags.UINT32: _make_struct_deserializer(tags.UINT32, 'I'),
+    tags.UINT64: _make_struct_deserializer(tags.UINT64, 'Q'),
+    tags.INT8: _make_struct_deserializer(tags.INT8, 'b'),
+    tags.INT16: _make_struct_deserializer(tags.INT16, 'h'),
+    tags.INT32: _make_struct_deserializer(tags.INT32, 'i'),
+    tags.INT64: _make_struct_deserializer(tags.INT64, 'q'),
+    tags.BINARY: _make_string_deserializer(tags.BINARY, lambda b: b),
+    tags.UTF8: _make_string_deserializer(tags.UTF8, lambda b: b.decode('utf-8')),
+    tags.UTF16: _make_string_deserializer(tags.UTF16, lambda b: b.decode('utf-16')),
+    tags.UTF32: _make_string_deserializer(tags.UTF32, lambda b: b.decode('utf-32')),
+    tags.TUPLE: _deserialize_tuple,
 }
 
 def _deserialize_partial(b):
