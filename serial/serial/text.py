@@ -1,3 +1,4 @@
+import binascii
 import re
 
 from . import tags
@@ -24,6 +25,9 @@ def _make_signed_integer_serializer(bit_length):
     lower_bound = -upper_bound
     return _make_integer_serializer(lower_bound, upper_bound, 'i{}'.format(bit_length))
 
+def _serialize_binary(to):
+    return 'bin"{}"'.format(binascii.hexlify(to.instance).decode('ascii'))
+
 _SERIALIZERS = {
     tags.NULL: _make_literal_serializer(None, 'null'),
     tags.TRUE: _make_literal_serializer(True, 'true'),
@@ -36,6 +40,7 @@ _SERIALIZERS = {
     tags.INT16: _make_signed_integer_serializer(16),
     tags.INT32: _make_signed_integer_serializer(32),
     tags.INT64: _make_signed_integer_serializer(64),
+    tags.BINARY: _serialize_binary,
 }
 
 def serialize(to):
@@ -84,6 +89,21 @@ def _make_signed_int_deserializer(tag, bit_length):
 
     return _make_regex_deserializer(tag, _decoder, r'(-?\d+)' + 'i{}'.format(bit_length))
 
+_BINARY_MATCHER = re.compile(r'bin"([\da-f]*)"').match
+
+def _deserialize_binary(s):
+    match = _BINARY_MATCHER(s)
+
+    if match is None:
+        return False, None, None
+
+    result = tags.TaggedObject(
+        tag = tags.BINARY,
+        instance = binascii.unhexlify(match.group(1)),
+    )
+
+    return True, result, s[match.end():]
+
 _DESERIALIZERS = [
     _make_literal_deserializer(tags.NULL, None, 'null'),
     _make_literal_deserializer(tags.TRUE, True, 'true'),
@@ -96,6 +116,7 @@ _DESERIALIZERS = [
     _make_signed_int_deserializer(tags.INT16, 16),
     _make_signed_int_deserializer(tags.INT32, 32),
     _make_signed_int_deserializer(tags.INT64, 64),
+    _deserialize_binary,
 ]
 
 def deserialize(s):
