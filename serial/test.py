@@ -1,8 +1,8 @@
 import unittest
 
-from serial import binary, tags
+from serial import binary, tags, text
 
-EXAMPLE_REPRESENTATIONS = [
+EXAMPLE_BINARY_REPRESENTATIONS = [
     (tags.TaggedObject(tags.NULL, None), b'\x00'),
     (tags.TaggedObject(tags.TRUE, True), b'\x01'),
     (tags.TaggedObject(tags.FALSE, False), b'\x02'),
@@ -44,16 +44,46 @@ EXAMPLE_REPRESENTATIONS = [
     ),
 ]
 
-class SerializeTests(unittest.TestCase):
+class BinarySerializeTests(unittest.TestCase):
     def test_serialize(self):
-        for tagged_object, expected in EXAMPLE_REPRESENTATIONS:
+        for tagged_object, expected in EXAMPLE_BINARY_REPRESENTATIONS:
             actual = binary.serialize(tagged_object)
             self.assertEqual(expected, actual)
 
-class DeserializeTests(unittest.TestCase):
+class BinaryDeserializeTests(unittest.TestCase):
     def test_deserialize(self):
-        for expected, representation in EXAMPLE_REPRESENTATIONS:
+        for expected, representation in EXAMPLE_BINARY_REPRESENTATIONS:
             actual = binary.deserialize(representation)
+            self.assertEqual(expected, actual)
+
+EXAMPLE_TEXT_REPRESENTATIONS = [
+    (tags.TaggedObject(tags.NULL, None), 'null'),
+    (tags.TaggedObject(tags.TRUE, True), 'true'),
+    (tags.TaggedObject(tags.FALSE, False), 'false'),
+    (tags.TaggedObject(tags.UINT8, 42), '42u8'),
+    (tags.TaggedObject(tags.UINT16, 42), '42u16'),
+    (tags.TaggedObject(tags.UINT32, 42), '42u32'),
+    (tags.TaggedObject(tags.UINT64, 42), '42u64'),
+    (tags.TaggedObject(tags.INT8, 42), '42i8'),
+    (tags.TaggedObject(tags.INT16, 42), '42i16'),
+    (tags.TaggedObject(tags.INT32, 42), '42i32'),
+    (tags.TaggedObject(tags.INT64, 42), '42i64'),
+    (tags.TaggedObject(tags.INT8, -2), '-2i8'),
+    (tags.TaggedObject(tags.INT16, -2), '-2i16'),
+    (tags.TaggedObject(tags.INT32, -2), '-2i32'),
+    (tags.TaggedObject(tags.INT64, -2), '-2i64'),
+]
+
+class TextSerializeTests(unittest.TestCase):
+    def test_serialize(self):
+        for tagged_object, expected in EXAMPLE_TEXT_REPRESENTATIONS:
+            actual = text.serialize(tagged_object)
+            self.assertEqual(expected, actual)
+
+class TextDeserializeTests(unittest.TestCase):
+    def test_deserialize(self):
+        for expected, representation in EXAMPLE_TEXT_REPRESENTATIONS:
+            actual = text.deserialize(representation)
             self.assertEqual(expected, actual)
 
 unittest.main()
