@@ -28,6 +28,24 @@ def _make_signed_integer_serializer(bit_length):
 def _serialize_binary(to):
     return 'bin"{}"'.format(binascii.hexlify(to.instance).decode('ascii'))
 
+_ESCAPES = {
+    '\\': '\\\\',
+    '"': '\\"',
+}
+
+def _escape_character(ch):
+    return _ESCAPES.get(ch, ch)
+
+def _escape(s):
+    return ''.join(_escape_character(ch) for ch in s)
+
+def _make_string_serializer(prefix):
+    def serializer(to):
+        assert isinstance(to.instance, str)
+        return '{}"{}"'.format(prefix, _escape(to.instance))
+
+    return serializer
+
 _SERIALIZERS = {
     tags.NULL: _make_literal_serializer(None, 'null'),
     tags.TRUE: _make_literal_serializer(True, 'true'),
@@ -41,6 +59,9 @@ _SERIALIZERS = {
     tags.INT32: _make_signed_integer_serializer(32),
     tags.INT64: _make_signed_integer_serializer(64),
     tags.BINARY: _serialize_binary,
+    tags.UTF8: _make_string_serializer('utf8'),
+    tags.UTF16: _make_string_serializer('utf16'),
+    tags.UTF32: _make_string_serializer('utf32'),
 }
 
 def serialize(to):
@@ -104,6 +125,52 @@ def _deserialize_binary(s):
 
     return True, result, s[match.end():]
 
+def _make_string_matcher(prefix):
+    return re.compile(prefix + r'"(([^"]|\\.)*)"').match
+
+_UNESCAPE_CHARACTERS = {
+    '\\': '\\',
+    '"': '"',
+}
+
+def _unescape_character(ch):
+    return _UNESCAPE_CHARACTERS[ch]
+
+def _unescape(s):
+    characters = []
+    escaping = False
+
+    for ch in s:
+        if escaping:
+            characters.append(_unescape_character(ch))
+            escaping = False
+
+        elif ch == '\\':
+            escaping = True
+
+        else:
+            characters.append(ch)
+
+    return ''.join(characters)
+
+def _make_string_deserializer(tag, prefix):
+    matcher = _make_string_matcher(prefix)
+
+    def deserializer(s):
+        match = matcher(s)
+
+        if match is None:
+            return False, None, None
+
+        result = tags.TaggedObject(
+            tag = tag,
+            instance = _unescape(match.group(1)),
+        )
+
+        return True, result, s[match.end():]
+
+    return deserializer
+
 _DESERIALIZERS = [
     _make_literal_deserializer(tags.NULL, None, 'null'),
     _make_literal_deserializer(tags.TRUE, True, 'true'),
@@ -117,6 +184,9 @@ _DESERIALIZERS = [
     _make_signed_int_deserializer(tags.INT32, 32),
     _make_signed_int_deserializer(tags.INT64, 64),
     _deserialize_binary,
+    _make_string_deserializer(tags.UTF8, 'utf8'),
+    _make_string_deserializer(tags.UTF16, 'utf16'),
+    _make_string_deserializer(tags.UTF32, 'utf32'),
 ]
 
 def deserialize(s):

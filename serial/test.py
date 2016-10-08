@@ -73,6 +73,9 @@ EXAMPLE_TEXT_REPRESENTATIONS = [
     (tags.TaggedObject(tags.INT32, -2), '-2i32'),
     (tags.TaggedObject(tags.INT64, -2), '-2i64'),
     (tags.TaggedObject(tags.BINARY, b'\x42\xde\xad\xbe\xef'), 'bin"42deadbeef"'),
+    (tags.TaggedObject(tags.UTF8, 'Lol!'), 'utf8"Lol!"'),
+    (tags.TaggedObject(tags.UTF16, 'かわ'), 'utf16"かわ"'),
+    (tags.TaggedObject(tags.UTF32, '漢'), 'utf32"漢"'),
 ]
 
 class TextSerializeTests(unittest.TestCase):
