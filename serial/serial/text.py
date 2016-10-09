@@ -46,6 +46,14 @@ def _make_string_serializer(prefix):
 
     return serializer
 
+def _indent(s, depth = 2):
+    return '\n'.join(' ' * depth + line for line in s.split('\n'))
+
+def _serialize_list(to):
+    assert isinstance(to.instance, list)
+
+    return '[\n' + _indent(',\n'.join(serialize(i) for i in to.instance)) + '\n]'
+
 _SERIALIZERS = {
     tags.NULL: _make_literal_serializer(None, 'null'),
     tags.TRUE: _make_literal_serializer(True, 'true'),
@@ -62,6 +70,7 @@ _SERIALIZERS = {
     tags.UTF8: _make_string_serializer('utf8'),
     tags.UTF16: _make_string_serializer('utf16'),
     tags.UTF32: _make_string_serializer('utf32'),
+    tags.LIST: _serialize_list,
 }
 
 def serialize(to):
@@ -171,6 +180,39 @@ def _make_string_deserializer(tag, prefix):
 
     return deserializer
 
+def _deserialize_list(s):
+    s = s.lstrip()
+
+    if not s.startswith('['):
+        return False, None, None
+
+    instance = []
+
+    s = s[1:].lstrip()
+
+    succeeded, result, s = _deserialize_one(s)
+
+    # TODO Handle empty lists
+
+    if succeeded:
+        instance.append(result)
+
+    s = s.lstrip()
+
+    while not s.startswith(']'):
+        assert s.startswith(',')
+        s = s[1:].lstrip()
+
+        succeeded, result, s = _deserialize_one(s)
+
+        # TODO Handle trailing commas
+        assert succeeded
+        instance.append(result)
+        s = s.lstrip()
+
+    assert s.startswith(']')
+    return True, tags.TaggedObject(tag = tags.LIST, instance = instance), s[1:]
+
 _DESERIALIZERS = [
     _make_literal_deserializer(tags.NULL, None, 'null'),
     _make_literal_deserializer(tags.TRUE, True, 'true'),
@@ -187,14 +229,22 @@ _DESERIALIZERS = [
     _make_string_deserializer(tags.UTF8, 'utf8'),
     _make_string_deserializer(tags.UTF16, 'utf16'),
     _make_string_deserializer(tags.UTF32, 'utf32'),
+    _deserialize_list,
 ]
 
-def deserialize(s):
+def _deserialize_one(s):
     for deserializer in _DESERIALIZERS:
         succeeded, result, remaining = deserializer(s)
 
         if succeeded:
-            assert remaining == ''
-            return result
+            return succeeded, result, remaining
 
-    raise Exception()
+    return False, None, None
+
+def deserialize(s):
+    succeeded, result, remaining = _deserialize_one(s)
+
+    assert succeeded
+    assert remaining == ''
+
+    return result

@@ -42,6 +42,17 @@ EXAMPLE_BINARY_REPRESENTATIONS = [
         ),
         b'\x30\x00\x00\x00\x03\x01\x03\x07'
     ),
+    (
+        tags.TaggedObject(
+            tag = tags.LIST,
+            instance = [
+                tags.TaggedObject(tag = tags.UINT8, instance = 9),
+                tags.TaggedObject(tag = tags.UINT8, instance = 22),
+                tags.TaggedObject(tag = tags.UINT8, instance = 36),
+            ],
+        ),
+        b'\x31\x03\x00\x00\x00\x03\x09\x16\x24',
+    ),
 ]
 
 class BinarySerializeTests(unittest.TestCase):
@@ -76,6 +87,17 @@ EXAMPLE_TEXT_REPRESENTATIONS = [
     (tags.TaggedObject(tags.UTF8, 'Lol!'), 'utf8"Lol!"'),
     (tags.TaggedObject(tags.UTF16, 'かわ'), 'utf16"かわ"'),
     (tags.TaggedObject(tags.UTF32, '漢'), 'utf32"漢"'),
+    (
+        tags.TaggedObject(
+            tag = tags.LIST,
+            instance = [
+                tags.TaggedObject(tag = tags.UINT8, instance = 9),
+                tags.TaggedObject(tag = tags.UINT8, instance = 22),
+                tags.TaggedObject(tag = tags.UINT8, instance = 36),
+            ],
+        ),
+        '[\n  9u8,\n  22u8,\n  36u8\n]'
+    ),
 ]
 
 class TextSerializeTests(unittest.TestCase):

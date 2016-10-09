@@ -40,6 +40,26 @@ def _serialize_tuple(to):
 
     return struct.pack('!BI', tags.TUPLE, len(payload)) + payload
 
+def _serialize_list(to):
+    assert isinstance(to.instance, list)
+
+    # TODO Actually handle this case somehow
+    assert len(to.instance) > 0
+
+    # TODO Do this a better way
+    serialized_items = [serialize(i) for i in to.instance]
+    list_tag = serialized_items[0][0]
+
+    def check_and_strip_prefix(b):
+        item_tag = b[0]
+        assert list_tag == item_tag
+        return b[1:]
+
+    payload = b''.join(check_and_strip_prefix(si) for si in serialized_items)
+
+    fmt = '!BBI'
+
+    return struct.pack(fmt, tags.LIST, list_tag, len(payload)) + payload
 
 _TAGS_TO_SERIALIZERS = {
     tags.NULL: _make_tag_only_serializer(tags.NULL, None),
@@ -58,6 +78,7 @@ _TAGS_TO_SERIALIZERS = {
     tags.UTF16: _make_string_serializer(lambda s: s.encode('utf-16')),
     tags.UTF32: _make_string_serializer(lambda s: s.encode('utf-32')),
     tags.TUPLE: _serialize_tuple,
+    tags.LIST: _serialize_list,
 }
 
 def serialize(to):
@@ -119,6 +140,26 @@ def _deserialize_tuple(b):
 
     return bytes_read, tags.TaggedObject(tag = tags.TUPLE, instance = tuple(instance))
 
+def _deserialize_list(b):
+    list_tag_bytes = b.read(1)
+    assert len(list_tag_bytes) == 1
+    list_tag = list_tag_bytes[0]
+
+    bytes_read, payload = _read_length_then_payload(b)
+
+    payload_stream = io.BytesIO(payload)
+
+    total_bytes_read = 0
+    instance = []
+
+    while total_bytes_read < len(payload):
+        partial_bytes_read, item = _TAGS_TO_PARSERS[list_tag](payload_stream)
+        total_bytes_read += partial_bytes_read
+        instance.append(item)
+
+    # TODO Return tags = (tags.LIST, list_tag) to function like a generic type
+    return bytes_read, tags.TaggedObject(tag = tags.LIST, instance = instance)
+
 _TAGS_TO_PARSERS = {
     tags.NULL: _make_tag_only_parser(tags.NULL, None),
     tags.TRUE: _make_tag_only_parser(tags.TRUE, True),
@@ -136,6 +177,7 @@ _TAGS_TO_PARSERS = {
     tags.UTF16: _make_string_deserializer(tags.UTF16, lambda b: b.decode('utf-16')),
     tags.UTF32: _make_string_deserializer(tags.UTF32, lambda b: b.decode('utf-32')),
     tags.TUPLE: _deserialize_tuple,
+    tags.LIST: _deserialize_list,
 }
 
 def _deserialize_partial(b):

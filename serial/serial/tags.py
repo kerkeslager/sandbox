@@ -16,6 +16,7 @@ UTF8 = 0x21
 UTF16 = 0x22
 UTF32 = 0x23
 TUPLE = 0x30
+LIST = 0x31
 
 TaggedObject = collections.namedtuple(
     'TaggedObject',
