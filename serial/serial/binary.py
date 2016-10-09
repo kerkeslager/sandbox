@@ -62,7 +62,25 @@ def _serialize_list(to):
     return struct.pack(fmt, tags.LIST, list_tag, len(payload)) + payload
 
 def _serialize_object(to):
-    raise Exception('Not implemented')
+    assert isinstance(to.instance, list)
+
+    # TODO Actually handle this case somehow
+    assert len(to.instance) > 0
+
+    # TODO Do this a better way
+    serialized_kvps = [(serialize(k), serialize(v)) for k,v in to.instance]
+    key_type_tag = serialized_kvps[0][0][0]
+
+    def check_and_strip_prefix(b):
+        item_tag = b[0]
+        assert key_type_tag == item_tag
+        return b[1:]
+
+    payload = b''.join(check_and_strip_prefix(k) + v for k,v in serialized_kvps)
+
+    fmt = '!BBI'
+
+    return struct.pack(fmt, tags.OBJECT, key_type_tag, len(payload)) + payload
 
 _TAGS_TO_SERIALIZERS = {
     tags.NULL: _make_tag_only_serializer(tags.NULL, None),
