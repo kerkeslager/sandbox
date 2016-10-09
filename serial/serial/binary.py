@@ -61,6 +61,9 @@ def _serialize_list(to):
 
     return struct.pack(fmt, tags.LIST, list_tag, len(payload)) + payload
 
+def _serialize_object(to):
+    raise Exception('Not implemented')
+
 _TAGS_TO_SERIALIZERS = {
     tags.NULL: _make_tag_only_serializer(tags.NULL, None),
     tags.TRUE: _make_tag_only_serializer(tags.TRUE, True),
@@ -79,6 +82,7 @@ _TAGS_TO_SERIALIZERS = {
     tags.UTF32: _make_string_serializer(lambda s: s.encode('utf-32')),
     tags.TUPLE: _serialize_tuple,
     tags.LIST: _serialize_list,
+    tags.OBJECT: _serialize_object,
 }
 
 def serialize(to):
@@ -160,6 +164,9 @@ def _deserialize_list(b):
     # TODO Return tags = (tags.LIST, list_tag) to function like a generic type
     return bytes_read, tags.TaggedObject(tag = tags.LIST, instance = instance)
 
+def _deserialize_object(b):
+    raise Exception('Not implemented')
+
 _TAGS_TO_PARSERS = {
     tags.NULL: _make_tag_only_parser(tags.NULL, None),
     tags.TRUE: _make_tag_only_parser(tags.TRUE, True),
@@ -178,6 +185,7 @@ _TAGS_TO_PARSERS = {
     tags.UTF32: _make_string_deserializer(tags.UTF32, lambda b: b.decode('utf-32')),
     tags.TUPLE: _deserialize_tuple,
     tags.LIST: _deserialize_list,
+    tags.OBJECT: _deserialize_object,
 }
 
 def _deserialize_partial(b):

@@ -53,6 +53,22 @@ EXAMPLE_BINARY_REPRESENTATIONS = [
         ),
         b'\x31\x03\x00\x00\x00\x03\x09\x16\x24',
     ),
+    (
+        tags.TaggedObject(
+            tag = tags.OBJECT,
+            instance = [
+                (
+                    tags.TaggedObject(tag = tags.UTF8, instance = 'foo'),
+                    tags.TaggedObject(tag = tags.UTF8, instance = 'bar'),
+                ),
+                (
+                    tags.TaggedObject(tag = tags.UTF8, instance = 'baz'),
+                    tags.TaggedObject(tag = tags.UINT8, instance = 42),
+                ),
+            ],
+        ),
+        b'\x32\x21\x00\x00\x00\x03foo\x21\x00\x00\x00\x03bar\x00\x00\x00\x03baz\x03\x2a',
+    ),
 ]
 
 class BinarySerializeTests(unittest.TestCase):
@@ -97,6 +113,22 @@ EXAMPLE_TEXT_REPRESENTATIONS = [
             ],
         ),
         '[\n  9u8,\n  22u8,\n  36u8\n]'
+    ),
+    (
+        tags.TaggedObject(
+            tag = tags.OBJECT,
+            instance = [
+                (
+                    tags.TaggedObject(tag = tags.UTF8, instance = 'foo'),
+                    tags.TaggedObject(tag = tags.UTF8, instance = 'bar'),
+                ),
+                (
+                    tags.TaggedObject(tag = tags.UTF8, instance = 'baz'),
+                    tags.TaggedObject(tag = tags.UINT8, instance = 42),
+                ),
+            ],
+        ),
+        '{\n  utf8"foo": utf8"bar",\n  utf8"baz": 42u8\n}',
     ),
 ]
 

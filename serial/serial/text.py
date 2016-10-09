@@ -54,6 +54,20 @@ def _serialize_list(to):
 
     return '[\n' + _indent(',\n'.join(serialize(i) for i in to.instance)) + '\n]'
 
+def _serialize_key_value_pair(kvp):
+    assert isinstance(kvp, tuple)
+    key, value = kvp
+
+    assert key.tag in [tags.UTF8, tags.UTF16, tags.UTF32]
+
+    return '{}: {}'.format(serialize(key), serialize(value))
+
+def _serialize_object(to):
+    assert isinstance(to.instance, list)
+
+    return '{\n' + _indent(',\n'.join(_serialize_key_value_pair(kvp) for kvp in to.instance)) + '\n}'
+    raise Exception('Not implemented')
+
 _SERIALIZERS = {
     tags.NULL: _make_literal_serializer(None, 'null'),
     tags.TRUE: _make_literal_serializer(True, 'true'),
@@ -71,6 +85,7 @@ _SERIALIZERS = {
     tags.UTF16: _make_string_serializer('utf16'),
     tags.UTF32: _make_string_serializer('utf32'),
     tags.LIST: _serialize_list,
+    tags.OBJECT: _serialize_object,
 }
 
 def serialize(to):
@@ -181,8 +196,6 @@ def _make_string_deserializer(tag, prefix):
     return deserializer
 
 def _deserialize_list(s):
-    s = s.lstrip()
-
     if not s.startswith('['):
         return False, None, None
 
@@ -213,6 +226,54 @@ def _deserialize_list(s):
     assert s.startswith(']')
     return True, tags.TaggedObject(tag = tags.LIST, instance = instance), s[1:]
 
+def _deserialize_object(s):
+    if not s.startswith('{'):
+        return False, None, None
+
+    instance = []
+
+    s = s[1:].lstrip()
+
+    # TODO Handle empty objects
+
+    succeeded, key, s = _deserialize_one(s)
+
+    assert succeeded
+    assert key.tag in [tags.UTF8, tags.UTF16, tags.UTF32]
+
+    s = s.lstrip()
+    assert s.startswith(':')
+
+    s = s[1:].lstrip()
+
+    succeeded, value, s = _deserialize_one(s)
+
+    assert succeeded
+    instance.append((key, value))
+
+    s = s.lstrip()
+
+    while s.startswith(','):
+        succeeded, key, s = _deserialize_one(s)
+
+        assert succeeded
+        assert key.tag in [tags.UTF8, tags.UTF16, tags.UTF32]
+
+        s = s.lstrip()
+        assert s.startswith(':')
+
+        s = s[1:].lstrip()
+
+        succeeded, value, s = _deserialize_one(s)
+
+        assert succeeded
+        instance.append((key, value))
+
+        s = s.lstrip()
+
+    assert s.startswith('}')
+    return True, tags.TaggedObject(tag = tags.LIST, instance = instance), s[1:]
+
 _DESERIALIZERS = [
     _make_literal_deserializer(tags.NULL, None, 'null'),
     _make_literal_deserializer(tags.TRUE, True, 'true'),
@@ -230,9 +291,12 @@ _DESERIALIZERS = [
     _make_string_deserializer(tags.UTF16, 'utf16'),
     _make_string_deserializer(tags.UTF32, 'utf32'),
     _deserialize_list,
+    _deserialize_object,
 ]
 
 def _deserialize_one(s):
+    s = s.lstrip()
+
     for deserializer in _DESERIALIZERS:
         succeeded, result, remaining = deserializer(s)
 
